@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- Rumi's app icon, drawn from web/rumi.js so the icon and the mascot never drift apart. scripts/render-icon.mjs screenshots it at 1024 px. -->
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: transparent; } svg { display: block; width: 1024px; height: 1024px; }</style>
+<body>
+<script src="../web/rumi.js"></script>
+<script>
+const shell = (x, y, w, h, rt, rb) => `M${x + rt} ${y}H${x + w - rt}Q${x + w} ${y} ${x + w} ${y + rt}V${y + h - rb}Q${x + w} ${y + h} ${x + w - rb} ${y + h}H${x + rb}Q${x} ${y + h} ${x} ${y + h - rb}V${y + rt}Q${x} ${y} ${x + rt} ${y}Z`;
+const mix = (a, b, t) => "#" + [1, 3, 5].map(i => Math.round(parseInt(a.slice(i, i + 2), 16) + (parseInt(b.slice(i, i + 2), 16) - parseInt(a.slice(i, i + 2), 16)) * t).toString(16).padStart(2, "0")).join("");
+// the old icon's carts stay behind; Rumi steps forward
+const back = (color, cx, ang) => { const g = { x: cx - 34, y: 58, w: 68, h: 88 };
+  return `<g transform="rotate(${ang} ${cx} 102)"><path d="${shell(g.x, g.y + 4, g.w, g.h, 9, 4)}" fill="#3c2814" opacity=".12"/><path d="${shell(g.x, g.y, g.w, g.h, 9, 4)}" fill="${color}"/>
+    <rect x="${g.x}" y="${g.y + 9}" width="3" height="${g.h - 13}" fill="#fff" opacity=".24"/>
+    <rect x="${g.x + 8}" y="${g.y + 18}" width="${g.w - 16}" height="44" rx="4" fill="${mix(color, "#fffdf8", .82)}"/>
+    ${[0, 1, 2].map(i => `<rect x="${g.x + 8}" y="${g.y + 24 + i * 5}" width="${g.w - 16}" height="2.6" fill="${color}"/>`).join("")}</g>`; };
+const rumi = Rumi.svg("idle", { size: 160 }).replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "").replace(/<text[^>]*>RUMI<\/text>/, "");
+document.body.innerHTML = `<svg viewBox="-14 -12 228 228" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f4ee"/><stop offset="1" stop-color="#ebe5da"/></linearGradient></defs>
+  <rect x="-14" y="-12" width="228" height="228" fill="url(#p)"/>
+  ${back("#f3c14d", 60, -14)}${back("#ec4f7c", 140, 14)}
+  <g transform="translate(13 0) scale(1.09)">${rumi}</g></svg>`;
+</script>

@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en" data-style="cartridge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rumi design system</title>
+<!-- Uses the app's own stylesheets, so every component below is the real thing. Values are read live from the CSS. -->
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  html, body { height: auto; overflow: auto; }
+  body { display: block; padding: 0 0 80px; }
+  body::after { display: none; }
+  .ds { max-width: 1120px; margin: 0 auto; padding: 0 44px; }
+  .ds-top { padding: 48px 0 8px; display: flex; align-items: baseline; gap: 14px; }
+  .ds-top h1 { font-size: 34px; font-weight: 800; letter-spacing: -.035em; margin: 0; }
+  .ds-top p { margin: 0; color: var(--dim); }
+  nav.ds-nav { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 14px 0; border-bottom: 1px solid var(--line); display: flex; gap: 4px; flex-wrap: wrap; }
+  nav.ds-nav a { color: var(--dim); text-decoration: none; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+  nav.ds-nav a:hover { background: var(--hover); color: var(--ink); }
+  section.ds-s { padding: 44px 0 8px; }
+  section.ds-s > h2 { font-size: 20px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
+  section.ds-s > p.lead { color: var(--dim); margin: 0 0 22px; max-width: 640px; }
+  h3.ds-h { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 28px 0 12px; }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); } .g4 { grid-template-columns: repeat(4, 1fr); } .g5 { grid-template-columns: repeat(5, 1fr); }
+  .card-ds { background: var(--panel); border-radius: 14px; box-shadow: 0 0 0 1px var(--line); padding: 16px; }
+  .spec { color: var(--faint); font-size: 11.5px; font-weight: 600; margin-top: 10px; line-height: 1.5; }
+  .spec b { color: var(--dim); font-weight: 700; }
+  .spec code, .rule code { font: 600 11px ui-monospace, Menlo, monospace; color: var(--dim); background: var(--hover); padding: 1px 5px; border-radius: 4px; }
+  .sw { height: 64px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); }
+  .swc { height: 64px; border-radius: 9px 9px 4px 4px; box-shadow: var(--shell); position: relative; }
+  .swc::before { content: ""; position: absolute; inset: 9px 8px 14px; border-radius: 3px; background: rgba(255,255,255,.72); }
+  .sw-n { font-weight: 800; margin-top: 8px; } .sw-v { color: var(--faint); font: 600 11px ui-monospace, Menlo, monospace; }
+  .type-row { display: grid; grid-template-columns: 170px 1fr; align-items: baseline; gap: 18px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .type-row .spec { margin: 0; }
+  .stage { position: relative; background: var(--well); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); }
+  .stage .b { position: absolute; }
+  .states { display: flex; flex-wrap: wrap; gap: 26px 30px; align-items: flex-start; }
+  .state { display: grid; gap: 10px; justify-items: start; }
+  .state > .lab { color: var(--faint); font-size: 11.5px; font-weight: 700; }
+  .rule { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .rule .no { font-weight: 800; color: var(--accent); }
+  .rule b { font-weight: 800; }
+  .rule p { margin: 3px 0 0; color: var(--dim); }
+  .pending { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: 2px; }
+  .kpop.static { position: relative; animation: none; }
+  .hint.static { position: relative; display: inline-block; }
+  .pane-demo { width: 420px; background: var(--panel); border-radius: 14px; box-shadow: 0 0 0 1px var(--line); padding: 8px 0; }
+  .mot { display: grid; grid-template-columns: 170px 90px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: center; }
+  .mot .bar { height: 8px; border-radius: 4px; background: var(--well); position: relative; overflow: hidden; }
+  .mot .bar i { position: absolute; inset: 0 auto 0 0; background: var(--ink); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="ds">
+  <div class="ds-top"><h1>Rumi</h1><p>Design system · the shipping look is <b>Cartridge</b>. Everything here is drawn with the app's own CSS.</p></div>
+  <nav class="ds-nav"><a href="#rules">Rules</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#shape">Shape</a><a href="#motion">Motion</a><a href="#buttons">Buttons</a><a href="#chips">Chips &amp; menu</a><a href="#cartridges">Cartridges</a><a href="#changed">What changed</a><a href="#rows">List rows</a><a href="#viewer">Viewer</a><a href="#nav">Path &amp; status</a><a href="#open">Open decisions</a></nav>
+
+  <section class="ds-s" id="rules">
+    <h2>Rules</h2>
+    <p class="lead">The few things every screen follows. When a new piece is made, it should pass all of these.</p>
+    <div class="rule"><span class="no">1</span><div><b>Say less; details on hover.</b><p>Labels are a word or two. Anything longer goes in a hint (<code>data-tip</code>) that appears instantly, with no delay. Lists show a thing's name; its path is in the hint. A hint never covers what you're choosing between: in menus it sits to the side.</p></div></div>
+    <div class="rule"><span class="no">2</span><div><b>Area shows size, and only what can carry a name is drawn.</b><p>A cartridge's size is its area. Its label is a name and, when it fits, one size chip. Anything too small to name folds into one "N more" tray. No specks, no slivers.</p></div></div>
+    <div class="rule"><span class="no">3</span><div><b>Every mark means one thing.</b><p><b>Colour</b> is the kind of content; a folder takes the colour of most of what's inside. <b>A tab</b> in the outline means folder: it opens. <b>The stripe</b> on a folder shows the mix inside. <b>An icon</b> is an app. <b>A white outlined area</b> is an opened folder. <b>A tray of spines</b> is the small leftovers. <b>Graphite</b> is macOS, locked. <b>A dashed slot</b> is something gone. <b>Pink</b> (<code>--accent</code>) is what you've picked and the one main button. In the Changed view only, colour says which way a thing went: orange grew, green shrank. Nothing is decoration.</p></div></div>
+    <div class="rule"><span class="no">4</span><div><b>Filters bring things forward, never fade them.</b><p>A filter changes what the map shows. Never dim the rest as a way to filter.</p></div></div>
+    <div class="rule"><span class="no">5</span><div><b>Every control shows its state.</b><p>Rest, hover, open (its menu or panel is showing), on (applied). Open and on can be true at once and must look different from each other.</p></div></div>
+    <div class="rule"><span class="no">6</span><div><b>Motion is quick and never in the way.</b><p>Only transform and opacity move. 120–320 ms, easing out. Input is never blocked: a click mid-motion finishes the motion and acts.</p></div></div>
+  </section>
+
+  <section class="ds-s" id="colour">
+    <h2>Colour</h2>
+    <p class="lead">Light, warm-neutral surfaces with black ink. Values below are read live from the stylesheet.</p>
+    <h3 class="ds-h">Surfaces &amp; ink</h3>
+    <div class="grid g5" id="sw-base"></div>
+    <h3 class="ds-h">Kinds (cartridge shells)</h3>
+    <div class="grid g5" id="sw-kind"></div>
+    <h3 class="ds-h">Signals</h3>
+    <div class="grid g5" id="sw-sig"></div>
+  </section>
+
+  <section class="ds-s" id="type">
+    <h2>Type</h2>
+    <p class="lead">One family, M PLUS Rounded 1c, falling back to the system font. Numbers are always tabular (<code>.num</code>).</p>
+    <div id="type-rows"></div>
+  </section>
+
+  <section class="ds-s" id="shape">
+    <h2>Shape</h2>
+    <p class="lead">Radii step up with size. Cartridges are rounder on top than at the connector edge.</p>
+    <div class="grid g5" id="radii"></div>
+    <h3 class="ds-h">Depth</h3>
+    <div class="grid g3">
+      <div><div class="card-ds" style="height:70px;box-shadow:0 0 0 1px var(--line)"></div><div class="spec"><b>Line</b> · cards, panels · <code>0 0 0 1px var(--line)</code></div></div>
+      <div><div class="card-ds" style="height:70px;box-shadow:var(--shadow)"></div><div class="spec"><b>Raised</b> · hover card, toast · <code>--shadow</code></div></div>
+      <div><div class="card-ds" style="height:70px;box-shadow:var(--shadow-pop)"></div><div class="spec"><b>Pop-over</b> · menus · <code>--shadow-pop</code></div></div>
+    </div>
+  </section>
+
+  <section class="ds-s" id="motion">
+    <h2>Motion</h2>
+    <p class="lead">Three speeds, two curves. Hover over a row to replay its timing.</p>
+    <div id="motion-rows"></div>
+  </section>
+
+  <section class="ds-s" id="buttons">
+    <h2>Buttons</h2>
+    <div class="states">
+      <div class="state"><span class="lab">Default</span><button class="btn">Rescan</button></div>
+      <div class="state"><span class="lab">Hover</span><button class="btn" style="box-shadow:0 0 0 1px rgba(24,24,27,.26),0 2px 6px rgba(0,0,0,.06)">Rescan</button></div>
+      <div class="state"><span class="lab">Primary (one per view)</span><button class="btn primary">Move to Trash</button></div>
+      <div class="state"><span class="lab">Small</span><button class="btn small">Show in Finder</button></div>
+      <div class="state"><span class="lab">Ghost</span><button class="btn ghost">Cancel</button></div>
+    </div>
+    <div class="spec"><b>Label:</b> a verb, two words at most. <b>Radius</b> <code>--r-md</code> · <b>weight</b> 700.</div>
+  </section>
+
+  <section class="ds-s" id="chips">
+    <h2>Chips &amp; menu</h2>
+    <p class="lead">The header colours. Clicking one with kinds inside (Documents, Photos…) opens a menu of them; the rest filter straight away. Its states:</p>
+    <div class="states" id="chip-states"></div>
+    <h3 class="ds-h">Kinds menu</h3>
+    <div class="states">
+      <div class="state"><span class="lab">One kind ticked, pointing at another</span>
+        <div style="display:flex;gap:14px;align-items:center">
+          <div class="kpop static" id="menu-demo"></div>
+          <div class="hint static">.html .htm .mhtml .webarchive · 1,180 files</div>
+        </div>
+      </div>
+    </div>
+    <div class="spec"><b>No title, no footer:</b> the list is the menu. Clear a filter with ✕ on the path row, or untick. <b>Row:</b> tick · name · size. Nothing else. Which file types a row covers, and how many files, live in its hint, shown beside the menu. <b>Row height</b> 32 px · <b>name</b> 13/600 ink · <b>size</b> 12/600 faint.</div>
+  </section>
+
+  <section class="ds-s" id="cartridges">
+    <h2>Cartridges</h2>
+    <p class="lead">Everything on the map is a cartridge: a plastic shell in its kind's colour with a printed label. A folder has a tab and a stripe. The label is a name and a size chip; the tier depends on the room it has.</p>
+    <div class="grid g4" id="carts"></div>
+  </section>
+
+  <section class="ds-s" id="changed">
+    <h2>What changed</h2>
+    <p class="lead">Every scan is compared with an earlier one. A chip under the big number says by how much the disk moved; clicking it swaps the map for only what changed, sized by how much.</p>
+    <div class="states" id="since-states"></div>
+    <div class="grid g4" id="chg-carts" style="margin-top:18px"></div>
+    <div class="spec"><b>Two colours:</b> orange grew or is new, green shrank (here, and only here, colour isn't the kind). <b>Removed</b> is an empty dashed slot, like free space on the shelf. <b>One number per cartridge:</b> the change, signed. The label's heading says which way (Grew, New, Shrank, Removed). <b>Hint on the chip:</b> the three things that moved most. <b>The comparison scan</b> stays the same for the day: it's replaced when the scan being retired is 12 hours older than the new one.</div>
+  </section>
+
+  <section class="ds-s" id="rows">
+    <h2>List rows</h2>
+    <p class="lead">The lists on the right. A row is: what it is (tile) · name and why · size. The name is the thing's own name, never its path: the path is in the hint. Where a name can't tell rows apart (copies of one file), the folder that differs follows, faint. No checkbox: clicking anywhere on the row picks it. A picked row's cartridge icon shows a pink tick in its label and its size turns pink; nothing else changes. The Trash is a row like any other ("Can't undo"); the black tray is the only place that acts.</p>
+    <div class="pane-demo" id="rows-demo"></div>
+  </section>
+
+  <section class="ds-s" id="viewer">
+    <h2>Viewer</h2>
+    <p class="lead">Photos, videos, web pages and code open over the map, grown out of their cartridge. ← → step through the others in the same folder; Esc puts it back.</p>
+    <div class="card-ds"><div class="vtop" style="padding:0;height:44px">
+      <div class="vt"><b>Recipe.html</b><span class="num">4 MB · Web page · 14 of 30</span></div>
+      <div class="vseg"><button class="on">Page</button><button>Code</button></div>
+      <button class="btn ghost vi">↗</button><button class="btn small primary">+ Add to Clean up</button><button class="btn ghost vi">✕</button>
+    </div></div>
+    <div class="spec"><b>Top bar:</b> name · size · kind · position, then the tools. <b>Page / Code</b> only for web pages. <b>Web pages</b> run live but sealed: their own origin, sandboxed, no reach into Rumi. <b>Code</b> is coloured lightly (comments, strings, numbers, keywords, tags), with line numbers, first 1 MB.</div>
+  </section>
+
+  <section class="ds-s" id="nav">
+    <h2>Path &amp; status</h2>
+    <h3 class="ds-h">Path, plain and filtered</h3>
+    <div class="card-ds" id="crumbs-demo" style="display:grid;gap:10px"></div>
+    <h3 class="ds-h">Status line (under the map)</h3>
+    <div class="card-ds"><div class="status" style="margin:0"><span class="hint3"><kbd>Esc</kbd> up</span><span><kbd>Space</kbd> preview</span><span><kbd>⌘⌫</kbd> trash</span></div></div>
+  </section>
+
+  <section class="ds-s" id="open">
+    <h2>Decisions</h2>
+    <p class="lead">None right now.</p>
+  </section>
+</div>
+
+<div class="hint" id="hint" hidden></div>
+<script>
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const $ = id => document.getElementById(id);
+const CHECK = `<svg class="i" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-6.5"/></svg>`;
+const PLUS = `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2.2"><path d="M8 3.5v9M3.5 8h9"/></svg>`;
+const FOLDER = `<svg class="i" viewBox="0 0 16 16" style="width:17px;height:17px"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6h5.6c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/></svg>`;
+
+// colour
+const swatch = (v, name, use, kind) => `<div><div class="${kind ? "swc" : "sw"}" style="background:var(${v})"></div><div class="sw-n">${name}</div><div class="sw-v">${v} · ${css(v)}</div><div class="spec" style="margin-top:2px">${use}</div></div>`;
+$("sw-base").innerHTML = [["--bg", "Background", "the window"], ["--panel", "Panel", "cards, menus"], ["--well", "Well", "behind the map"], ["--line", "Line", "edges, dividers"], ["--line2", "Line strong", "inputs, outlines"],
+  ["--ink", "Ink", "text, applied chips"], ["--dim", "Dim", "secondary text"], ["--faint", "Faint", "sizes, captions"], ["--hover", "Hover", "pointer over a control"], ["--rest1", "Rest", "“N more”, free space"]].map(a => swatch(...a)).join("");
+$("sw-kind").innerHTML = [["--c-video", "Video"], ["--c-image", "Photos"], ["--c-audio", "Audio"], ["--c-docs", "Documents"], ["--c-archive", "Archives"], ["--c-dev", "Developer"], ["--c-app", "Apps"], ["--c-cache", "Caches"], ["--c-other", "Other"], ["--c-system", "macOS keeps this"]].map(([v, n]) => swatch(v, n, "", true)).join("");
+$("sw-sig").innerHTML = [["--accent", "Accent", "picked to remove, the main button"], ["--ok", "OK", "“Safe”"], ["--warn", "Warn", "“Check first”"]].map(a => swatch(...a)).join("");
+
+// type
+$("type-rows").innerHTML = [
+  ["Hero number", "52 / 800 / −0.045em", `<span class="num" style="font-size:52px;font-weight:800;letter-spacing:-.045em;line-height:1">128.4<small style="font-size:22px;color:var(--dim);margin-left:3px">GB</small></span>`],
+  ["Panel number", "34 / 800", `<span class="num" style="font-size:34px;font-weight:800;letter-spacing:-.03em">32.5 GB</span>`],
+  ["Title", "15 / 800", `<span style="font-size:15px;font-weight:800">Downloads</span>`],
+  ["Body", "13 / 500", `<span>Quit Sandbox first · it may download again</span>`],
+  ["Label (cartridge)", "12.5 / 800", `<span style="font-size:12.5px;font-weight:800">Archive (7).zip</span>`],
+  ["Small", "12 / 600", `<span style="font-size:12px;font-weight:600;color:var(--dim)">1,204 files</span>`],
+  ["Caption", "11 / 800 / caps", `<span style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Show only</span>`],
+].map(([n, s, ex]) => `<div class="type-row"><div><div style="font-weight:800">${n}</div><div class="spec">${s}</div></div><div>${ex}</div></div>`).join("");
+
+// shape
+$("radii").innerHTML = [["--r-xs", "tick boxes"], ["--r-sm", "small cartridges, kbd"], ["--r-md", "buttons, tiles"], ["--r-lg", "cards, menus, the map"], ["--r-pill", "chips, tags"]]
+  .map(([v, u]) => `<div><div style="height:64px;background:var(--panel);box-shadow:0 0 0 1.5px var(--line2);border-radius:var(${v})"></div><div class="sw-n">${css(v)}</div><div class="sw-v">${v}</div><div class="spec" style="margin-top:2px">${u}</div></div>`).join("");
+
+// motion
+const motions = [["Hover, ticks", "--t-fast", "--ease-out", "colour and tick changes"], ["Menus, hints", "--t-base", "--ease-out", "a menu drops in from its chip (160 ms)"], ["Opening a folder", "--t-slow", "--ease-out", "the cartridge opens into the folder (300 ms)"], ["Ticking", "--t-slow", "--ease-spring", "a tick pops in with a little overshoot"], ["Applying a filter (sift)", "--t-slow", "--ease-out", "the old map sinks away; matches rise folder by folder, files pop in"]];
+$("motion-rows").innerHTML = motions.map(([n, t, e, u], i) => `<div class="mot" data-i="${i}"><div><div style="font-weight:800">${n}</div><div class="spec" style="margin:0">${u}</div></div><div class="sw-v">${css(t)} · ${e.replace("--ease-", "")}</div><div class="bar"><i style="width:0"></i></div></div>`).join("");
+document.querySelectorAll(".mot").forEach(r => r.addEventListener("mouseenter", () => {
+  const [, t, e] = motions[+r.dataset.i], i = r.querySelector(".bar i");
+  i.animate([{ width: "0%" }, { width: "100%" }], { duration: parseFloat(css(t)) * 1000, easing: css(e), fill: "forwards" });
+}));
+document.querySelectorAll(".mot .bar i").forEach(i => i.style.width = "100%");
+
+// chips
+const chip = (cls, lbl, size, chev = true) => `<button class="chip ${cls}" data-cat="docs"><i style="background:var(--c-docs)"></i>${lbl} <b class="num">${size}</b></button>`;
+$("chip-states").innerHTML = [["Rest", chip("", "Documents", "880 MB")], ["Hover", chip("", "Documents", "880 MB").replace('class="chip ', 'style="background:var(--hover);color:var(--ink)" class="chip ')],
+  ["Menu open", chip("open", "Documents", "880 MB")], ["Applied", chip("on", "Web pages", "210 MB")], ["Applied, menu open", chip("on open", "Web pages", "210 MB")], ["No menu", chip("", "Apps", "9.6 GB", false).replace("--c-docs", "--c-app")]]
+  .map(([l, h]) => `<div class="state"><span class="lab">${l}</span><div class="chips" style="margin:0">${h}</div></div>`).join("");
+const kr = (on, n, s, tip, hov) => `<button class="kr ${on ? "on" : ""}" ${hov ? 'style="background:var(--hover)"' : ""}><span class="cb">${CHECK}</span><span class="kn">${n}</span><span class="ks num">${s}</span></button>`;
+$("menu-demo").innerHTML = `${kr(false, "All documents", "880 MB")}<div class="ksep"></div>${kr(false, "PDF", "290 MB")}${kr(true, "Web pages", "210 MB", "", true)}${kr(false, "Spreadsheets", "150 MB")}${kr(false, "Text &amp; Markdown", "120 MB")}${kr(false, "Slides", "40 MB")}`;
+
+// cartridges: same markup the map draws (block() in index.html)
+const stripe = (mix, cls) => `<span class="${cls}">${mix.map(([c, v]) => `<i style="flex:${v};background:var(--c-${c})"></i>`).join("")}</span>`;
+const cart = ({ w, h, cat, name, size, cls = "", mix }) => {
+  const tiers = [w < 100 || h < 70 ? "sm" : "", w < 46 || h < 22 ? "xs" : (w < 72 && h >= 72 && h > w * 1.4 ? "spine" : "")].join(" ");
+  return `<div class="b leaf ${tiers} ${cls}" data-cat="${cat}" style="left:${(240 - w) / 2}px;top:${(170 - h) / 2}px;width:${w}px;height:${h}px;--bc:var(--c-${cat})">
+    <div class="lbl"><span class="k"></span><span class="n">${name}</span>${size ? `<span class="s num">${size}</span>` : ""}</div>
+    ${mix ? stripe(mix, "mixbar") : ""}<button class="pick">${cls.includes("sel") ? CHECK : PLUS}</button></div>`;
+};
+const container = () => `<div class="b container" data-cat="audio" style="left:14px;top:10px;width:212px;height:150px;--bc:var(--c-audio)"><div class="hd"><span class="n">Podcast</span><span class="s num">310 MB</span></div>${stripe([["audio", 80], ["image", 14], ["docs", 6]], "mixline")}
+  ${[0, 1, 2].map(i => `<div class="b leaf inner sm spine" data-cat="audio" style="left:${14 + i * 50}px;top:50px;width:44px;height:88px;--bc:color-mix(in oklab, var(--c-audio), ${i % 2 ? "white" : "black"} ${[0, 7, 7][i]}%)"><div class="lbl"><span class="n">Episode ${i + 1}.mp3</span></div></div>`).join("")}
+  <div class="b rest sm nolbl" style="left:166px;top:50px;width:34px;height:88px"></div></div>`;
+const rest = () => `<div class="b rest" data-cat="other" style="left:26px;top:24px;width:188px;height:122px"><div class="lbl"><span class="n">480 more · 260 MB</span></div></div>`;
+const locked = () => `<div class="b leaf locked" style="left:30px;top:15px;width:180px;height:140px;--bc:var(--c-locked)"><div class="lbl"><span class="k">Locked</span><span class="n">macOS keeps this</span><span class="s num">42 GB</span></div></div>`;
+const carts = [
+  ["File", "colour is its kind; the label is a name and a size chip", cart({ w: 170, h: 130, cat: "video", name: "Beach day.mov", size: "640 MB" })],
+  ["Folder", "a tab in the outline: it opens. The stripe shows what's inside", cart({ w: 180, h: 140, cat: "image", name: "Holiday photos", size: "180 MB", cls: "dir", mix: [["image", 72], ["docs", 18], ["video", 10]] })],
+  ["Small file", "name and size", cart({ w: 94, h: 84, cat: "archive", name: "Old site.zip", size: "36 MB" })],
+  ["Small folder", "keeps the tab and, with room, the stripe", cart({ w: 94, h: 84, cat: "dev", name: "node_modules", cls: "dir", mix: [["dev", 90], ["other", 10]] })],
+  ["Spine", "tall and narrow: the name runs up the side", cart({ w: 50, h: 120, cat: "audio", name: "Episode 03.mp3" })],
+  ["Opened folder", "a white outlined tray: name, stripe, then what's inside", container()],
+  ["N more", "what's too small to name, in one tray. Click lists them", rest()],
+  ["macOS keeps this", "graphite and hatched: locked, never mistaken for a folder", locked()],
+  ["Picked", "added to Clean up: pink label, tick", cart({ w: 150, h: 110, cat: "dev", name: "build", size: "1.2 GB", cls: "sel" })],
+  ["Hover", "lifts, + appears", cart({ w: 150, h: 110, cat: "docs", name: "Recipe.html", size: "4 MB", cls: "hov" })],
+];
+$("carts").innerHTML = carts.map(([n, u, h]) => `<div><div class="stage" style="height:170px">${h}</div><div class="spec"><b>${n}</b> · ${u}</div></div>`).join("");
+document.querySelectorAll(".b.hov").forEach(b => { b.style.filter = "brightness(1.04)"; b.querySelector(".pick").style.display = "grid"; });
+
+// rows
+const tile = c => `<span class="tile" style="--c:var(--c-${c})">${FOLDER}</span>`;
+const row = (t, tag, why, size, on, tip) => `<div class="row" style="${on ? "" : ""}"><input type="checkbox" ${on ? "checked" : ""}>${tile("cache")}<div class="nm" data-tip="${tip || ""}"><div class="t"><span class="tt">${t}</span>${tag}</div>${why ? `<div class="why">${why}</div>` : ""}</div><div class="sz num">${size}</div></div>`;
+$("rows-demo").innerHTML = `<div class="grp"><span class="t">Caches</span><span class="s num">27.3 GB</span><span class="d">Rebuilt automatically</span></div>`
+  + row("Sandbox's virtual machine", `<span class="tag review">Check first</span>`, "Quit Sandbox first · it may download again", "9.4 GB", true)
+  + row("Browser", `<span class="tag safe">Safe</span>`, "", "5.10 GB", false, "~/Library/Caches/Browser")
+  + row("Notes", `<span class="tag safe">Safe</span>`, "", "3.20 GB", false, "~/Library/Caches/com.example.notes")
+  + row("hero.png", `<span class="in">public</span><span class="tag keep">Keep</span>`, "", "2 MB", false, "~/Projects/site/public/hero.png")
+  + row("hero.png", `<span class="in">dist</span>`, "", "2 MB", false, "~/Projects/site/dist/hero.png");
+
+// what changed: the since chip and the four cartridges of the Changed view
+const since = (cls, col, amt) => `<button class="chip ${cls}" style="margin:0"><i style="background:var(${col})"></i><b class="num">${amt}</b> since Friday</button>`;
+$("since-states").innerHTML = [["Grew", since("", "--c-up", "+2.4 GB")], ["Shrank", since("", "--c-down", "−4.2 GB")], ["On: the map shows only what changed", since("on", "--c-up", "+2.4 GB")]]
+  .map(([l, h]) => `<div class="state"><span class="lab">${l}</span>${h}</div>`).join("");
+const chg = (dir, kind, name, amt, big) => `<div class="b leaf chg ${dir}" style="left:30px;top:20px;width:180px;height:130px;--bc:${dir === "gone" ? "transparent" : `var(--c-${dir})`}">
+  <div class="lbl"><span class="k">${kind}</span><span class="n">${name}</span></div><div class="bigsz num" style="font-size:28px;--fs:28px">${amt}<span class="u">&nbsp;${big}</span></div></div>`;
+$("chg-carts").innerHTML = [["Grew", "bigger than last time", chg("up", "Grew", "Caches", "+1.3", "GB")], ["New", "wasn't there last time", chg("up", "New", "Trip videos", "+220", "MB")],
+  ["Shrank", "smaller than last time", chg("down", "Shrank", "Old exports", "−6.8", "GB")], ["Removed", "gone since last time: an empty slot", chg("gone", "Removed", "draft-v1", "−1.9", "GB")]]
+  .map(([n, u, h]) => `<div><div class="stage" style="height:170px">${h}</div><div class="spec"><b>${n}</b> · ${u}</div></div>`).join("");
+
+// path
+const sep = `<span class="sep"><svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>`;
+const back = `<button class="back"><svg class="i" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></button>`;
+$("crumbs-demo").innerHTML = `<div class="crumbs" style="margin:0">${back}<button class="c">This Mac</button>${sep}<button class="c">Home</button>${sep}<button class="c cur">Downloads</button><span class="meta"><b class="num">2.4 GB</b></span></div>
+  <div class="crumbs" style="margin:0">${back}<button class="c">This Mac</button>${sep}<button class="c">Home</button>${sep}<button class="c cur">Downloads</button><span class="meta fmeta"><span class="fk"><i style="background:var(--c-docs)"></i>Web pages</span><span class="num">212 files</span><b class="num">88 MB</b><button class="fx"><svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button></span></div>`;
+</script>
+</body>
+</html>

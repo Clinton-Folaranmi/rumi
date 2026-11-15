@@ -1,0 +1,1815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rumi</title>
+<script>
+// Cartridge is the only skin (the parked ones are in git history). An old saved choice ("pond"…) is ignored.
+document.documentElement.dataset.style = "cartridge";
+try { localStorage.removeItem("sm-skin"); } catch (e) {}
+</script>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">
+      <span class="mascot" id="brand-rumi" title="Rumi"></span>
+      Rumi
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="find-btn" data-tip="⌘F"></button>
+    <button class="btn" id="rescan" data-tip="⌘R"><svg class="i" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg><span id="rescan-l">Rescan</span></button>
+  </div>
+  <div class="dash">
+    <div class="hero"><div class="big num" id="hero-used">—</div><div class="sub" id="hero-sub">Reading your disk…</div><button class="chip" id="since" hidden></button></div>
+    <div><div class="diskbar" id="diskbar"></div><div class="chips" id="chips"></div></div>
+  </div>
+</header>
+
+<main>
+  <section class="mapcol">
+    <div class="crumbs" id="crumbs"></div>
+    <div id="map"><div class="grainmap"></div></div>
+    <div class="status" id="status"><span class="hint3"><kbd>Esc</kbd> up</span><span class="hint4" id="hint-ql" hidden><kbd>Space</kbd> preview</span><span class="hint5" id="hint-trash" hidden><kbd>⌘⌫</kbd> trash</span></div>
+  </section>
+  <aside>
+    <div class="seg" id="tabs">
+      <button data-tab="cleanup" class="on">Clean up<span class="badge num" id="b-cleanup">&nbsp;</span></button>
+      <button data-tab="dupes">Duplicates<span class="badge num" id="b-dupes">&nbsp;</span></button>
+      <button data-tab="biggest">Biggest<span class="badge">files</span></button>
+      <button data-tab="folder">Folder<span class="badge" id="b-folder">contents</span></button>
+    </div>
+    <div class="pane" id="pane"></div>
+  </aside>
+</main>
+
+<div class="tray" id="tray">
+  <div class="info"><b class="num" id="tray-size">0 GB</b><div id="tray-count">0 items</div></div>
+  <button class="btn ghost" id="tray-clear">Clear</button>
+  <button class="btn primary" id="tray-go"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg><span id="tray-go-l">Move to Trash</span></button>
+</div>
+
+<div class="overlay" id="scanning" hidden>
+  <div class="scan">
+    <div class="scan-rumi" id="scan-rumi"></div>
+    <h2 id="scan-h">Mapping your Mac</h2>
+    <div class="count num" id="scan-count">0</div>
+    <div style="color:var(--dim)" id="scan-msg">files</div>
+  </div>
+</div>
+
+<div class="overlay" id="access" hidden>
+  <div class="welcome">
+    <div class="shelf" aria-hidden="true"><span class="mascot" id="access-rumi"></span><i style="--c:var(--c-image)"></i><i style="--c:var(--c-video)"></i><i style="--c:var(--c-dev)"></i><i style="--c:var(--c-audio)"></i></div>
+    <h2 id="access-h">Let Rumi see your whole Mac</h2>
+    <p id="access-p">Without Full Disk Access, Mail, Messages, Photos and Safari are missing from the map. Rumi only reads names and sizes.</p>
+    <ol><li>Turn on <b>Rumi</b> under Full Disk Access</li><li>Choose <b>Quit &amp; Reopen</b></li></ol>
+    <div class="acts"><button class="btn ghost" id="access-skip">Skip for now</button><button class="btn primary" id="access-open">Open System Settings</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="confirm" hidden>
+  <div class="modal">
+    <h2 id="cf-title">Move to Trash?</h2>
+    <p>You can put them back until you empty the Trash.</p>
+    <p class="warnline" id="cf-warn" hidden></p>
+    <ul id="cf-list"></ul>
+    <p class="note" id="cf-first" hidden>macOS will ask to let Rumi use Finder. Say OK so Put Back works.</p>
+    <div class="acts"><button class="btn" id="cf-no">Cancel</button><button class="btn primary" id="cf-yes">Move to Trash</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="hidden" hidden>
+  <div class="modal hcard" role="dialog" aria-labelledby="hd-h">
+    <button class="x" id="hd-x" aria-label="Close"><svg class="i" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    <div class="htop">
+      <div><span class="hk"><svg class="i" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>Locked</span>
+        <h2 id="hd-h">macOS keeps this</h2>
+        <p>Everything outside Home and Applications.</p></div>
+      <div class="big num" id="hd-size"></div>
+    </div>
+    <div class="hbar" id="hd-bar"></div>
+    <div id="hd-rows"></div>
+    <div class="hfree" id="hd-free"></div>
+  </div>
+</div>
+
+<div class="viewer" id="viewer" hidden>
+  <div class="vtop">
+    <div class="vt"><b id="v-name"></b><span id="v-meta" class="num"></span></div>
+    <div class="vseg" id="v-mode" hidden><button data-m="page">Page</button><button data-m="code">Code</button></div>
+    <button class="btn ghost vi" id="v-app" data-tip="Open in its app"></button>
+    <button class="btn ghost vi" id="v-finder" data-tip="Show in Finder"></button>
+    <button class="btn small" id="v-pick"></button>
+    <button class="btn ghost vi" id="v-trash" data-tip="Move to Trash · ⌘⌫"></button>
+    <button class="btn ghost vi" id="v-x" data-tip="Close · Esc"></button>
+  </div>
+  <div class="vstage" id="v-stage"><div class="vframe" id="v-frame"></div>
+    <button class="vnav prev" id="v-prev" aria-label="Previous"></button><button class="vnav next" id="v-next" aria-label="Next"></button></div>
+</div>
+<div class="find" id="find" hidden><div class="fbox">
+  <div class="fin"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><input id="f-q" placeholder="Search files and folders" spellcheck="false" autocomplete="off"><span id="f-n" class="num"></span></div>
+  <div class="flist" id="f-list"></div>
+  <div class="ffoot"><span><kbd>↵</kbd> open</span><span><kbd>⌘↵</kbd> show on map</span><span><kbd>esc</kbd> close</span></div>
+</div></div>
+<div class="kpop" id="kpop" hidden></div>
+<div class="tip" id="tip" hidden></div>
+<div class="insp" id="insp" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<div class="hint" id="hint" hidden></div>
+
+<script src="/rumi.js"></script>
+<script>
+const CAT = {
+  video: "Video", image: "Photos", audio: "Audio", docs: "Documents", archive: "Archives",
+  dev: "Developer", app: "Apps", cache: "Caches", other: "Other",
+};
+const THUMB_EXT = new Set("jpg jpeg png gif heic heif webp tif tiff psd dng cr2 cr3 nef arw bmp svg mp4 mov m4v mkv avi webm pdf key pages numbers ai sketch".split(" "));
+const PHOTO_EXT = new Set("jpg jpeg png gif heic heif webp tif tiff psd dng cr2 cr3 nef arw bmp mp4 mov m4v mkv avi webm".split(" "));
+// colour tokens are read once per task (one map draw asks for hundreds), then read fresh next time
+const cssCache = new Map();
+function css(v) {
+  if (!cssCache.size) queueMicrotask(() => cssCache.clear());
+  let x = cssCache.get(v);
+  if (x === undefined) { x = getComputedStyle(document.documentElement).getPropertyValue(v).trim(); cssCache.set(v, x); }
+  return x;
+}
+const color = c => css("--c-" + (CAT[c] ? c : "other"));
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const wait = ms => new Promise(r => setTimeout(r, ms));
+// overlays fade in by CSS; hide() lets them fade out before they go
+function show(id) { $("hint").hidden = true; const el = $(id); clearTimeout(el._t); el.classList.remove("closing"); el.hidden = false; }
+function hide(id) {
+  const el = $(id); $("hint").hidden = true; if (el.hidden || el.classList.contains("closing")) return;
+  el.classList.add("closing"); el._t = setTimeout(() => { el.hidden = true; el.classList.remove("closing"); }, 160);
+}
+
+const params = new URLSearchParams(location.search);
+let TOKEN = params.get("t") || sessionStorage.getItem("sm-token") || "";
+if (params.get("t")) { sessionStorage.setItem("sm-token", TOKEN); const u = new URL(location.href); u.searchParams.delete("t"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
+/* ---------- map geometry (cartridge) ----------
+   gap between cartridges, gap inside a tray, a tray's heading (its name, then its stripe) and padding;
+   app icons sit in the label's art box */
+const LAYOUT = { gap: 18, igap: 10, head: 48, pad: 12, iconMax: 88, iconW: 0.6,
+  iconBox: (w, h) => w < 100 || h < 70 ? [7, 9] : [h < 150 ? 44 : 70, Math.max(18, h * 0.24) + 4] };
+
+const NATIVE = window.webkit?.messageHandlers?.rumi;   // set when running inside the Rumi Mac app
+async function api(path, body) {
+  if (body && NATIVE) return NATIVE.postMessage({ path, body });
+  const r = await fetch(path, body ? { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(body) }
+                                   : { headers: { "X-Token": TOKEN } });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+  return r.json();
+}
+
+function fmt(b, parts) {
+  if (b == null) return "";
+  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (b >= 1000 && i < u.length - 1) { b /= 1000; i++; }
+  const n = i >= 3 ? b.toFixed(b < 10 ? 2 : 1) : String(Math.round(b));
+  return parts ? [n, u[i]] : n + " " + u[i];
+}
+function ago(t) {
+  if (!t) return "";
+  const d = (Date.now() / 1000 - t) / 86400;
+  if (d < 1) return "today"; if (d < 2) return "yesterday"; if (d < 45) return Math.round(d) + " days ago";
+  if (d < 600) return Math.round(d / 30) + " months ago"; return (d / 365).toFixed(1) + " years ago";
+}
+let HOME = "";
+const tilde = p => HOME && p && p.startsWith(HOME) ? "~" + p.slice(HOME.length) : p;
+const base = p => (p || "").split("/").filter(Boolean).pop() || p;
+// the folder something sits in, by name ("Downloads"); the full path is always in the hover hint
+const whereOf = p => { const d = (p || "").slice(0, (p || "").lastIndexOf("/")); return d === HOME ? "Home" : base(d) || "/"; };
+// copies of one file: what tells them apart is the first folder where their paths differ
+function tellApart(paths) {
+  const parts = paths.map(p => p.split("/").filter(Boolean).slice(0, -1));
+  let i = 0; while (parts.every(a => i < a.length) && parts.every(a => a[i] === parts[0][i])) i++;
+  const out = parts.map(a => a[i] ?? a.at(-1) ?? "/");
+  return new Set(out).size > 1 ? out : paths.map(() => "");
+}
+// since last time: "+2.9 GB", and the day the comparison scan was made ("Thursday", "yesterday", "9:05 AM", "Nov 3")
+const sgn = d => (d < 0 ? "−" : "+") + fmt(Math.abs(d));
+function sinceDay(t) {
+  const d = new Date(t * 1000), n = new Date(), day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()), days = Math.round((day(n) - day(d)) / 864e5);
+  if (days <= 0) return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (days === 1) return "yesterday";
+  return d.toLocaleDateString(undefined, days < 7 ? { weekday: "long" } : { month: "short", day: "numeric" });
+}
+// a cartridge in the Changed view: which way it went, and by how much
+const chKind = k => k.type === "gone" ? "Removed" : k.new ? "New" : k.d > 0 ? "Grew" : k.d < 0 ? "Shrank" : "Changed";
+const chAmt = k => k.type === "gone" ? "−" + fmt(k.size) : k.new ? "+" + fmt(k.size) : sgn(k.d || 0);
+const wOf = k => k.w ?? k.size;   // the room a cartridge gets: its size, or in the Changed view how much moved
+const CAT_ORDER = ["video", "image", "audio", "docs", "archive", "dev", "app", "cache", "other"];   // the order `mx` comes in
+const isFolderK = k => k.type === "dir" && !isApp(k) && !k.pkg;
+// A folder's stripe: what's inside it by kind, biggest share first. `mx` is its share of each kind out of 127.
+function mixHTML(k, cls) {
+  const parts = Array.isArray(k.mx) ? k.mx.map((v, i) => [CAT_ORDER[i], v]).filter(x => x[1] > 3).sort((a, b) => b[1] - a[1]) : [[k.cat || "other", 1]];
+  return `<span class="${cls}">${parts.map(([c, v]) => `<i style="flex:${v};background:${color(c)}"></i>`).join("")}</span>`;
+}
+// Only cartridges that can carry a name are drawn. The most that fit are kept, biggest first; the rest fold into one
+// "N more" tray. Returns null when not even one fits (the caller then draws the folder as a single cartridge).
+const restCount = c => c.n || parseInt(String(c.name).replace(/,/g, "")) || 1;
+function readable(list, x, y, w, h, wt, gap, openPath) {
+  const real = list.filter(c => c.type !== "rest").sort((a, b) => b.size - a.size), rest0 = list.filter(c => c.type === "rest");
+  // what block() and the stylesheet need to print a name: not the "xs" tier, and wide enough for a label or tall enough for a spine
+  const named = r => { const W = r.w - gap, H = r.h - gap; return !(W < 46 || H < 22 || (H < 34 && W < 90)) && (W >= 59 || (H >= 72 && H > W * 1.4)); };
+  for (let k = real.length; k >= 1; k--) {
+    const drop = [...real.slice(k), ...rest0], n = drop.reduce((a, c) => a + (c.type === "rest" ? restCount(c) : 1), 0);
+    const items = drop.length ? [...real.slice(0, k), { type: "rest", cat: "other", name: `${n.toLocaleString()} more`, size: drop.reduce((a, c) => a + c.size, 0), n, open: openPath }] : real;
+    if (squarify(items, x, y, w, h, wt).filter(r => r.item.type !== "rest").every(named)) return items;
+  }
+  return null;
+}
+// Names in one folder that start the same ("report-draft-v1", "report-draft-v2"): how many letters each shares
+// with a neighbour. A short label then keeps the end of the name, the part that differs.
+const leadCache = new WeakMap();
+function sharedLead(par, name) {
+  if (!par?.children) return 0;
+  let m = leadCache.get(par);
+  if (!m) {
+    m = new Map(); const names = par.children.filter(c => c.type !== "rest").map(c => label(c)).sort();
+    names.forEach((n, i) => { let best = 0; for (const o of [names[i - 1], names[i + 1]]) { if (o == null) continue; let j = 0; while (j < n.length && j < o.length && n[j] === o[j]) j++; best = Math.max(best, j); } m.set(n, best); });
+    leadCache.set(par, m);
+  }
+  return m.get(name) || 0;
+}
+const ext = n => { const m = /\.([a-z0-9]{1,6})$/i.exec(n || ""); return m ? m[1].toLowerCase() : ""; };
+const isApp = k => /\.app$/.test(k.name || k.path || "");
+const canThumb = k => !!k.path && (isApp(k) || (k.type !== "dir" && THUMB_EXT.has(ext(k.name || k.path))));
+const thumbURL = (p, s) => `/api/thumb?t=${encodeURIComponent(TOKEN)}&path=${encodeURIComponent(p)}${s ? `&s=${s}` : ""}`;
+const chars = (str, cls = "ch") => [...String(str)].map((c, i) => `<span class="${cls}" style="--i:${i}">${c === " " ? "&nbsp;" : esc(c)}</span>`).join("");
+function isLight(c) { if (!/^#[0-9a-f]{6}$/i.test(c)) return false; const n = parseInt(c.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 > 0.62; }
+function hash(str) { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
+const rootName = n => n === HOME || n === "~" ? "Home" : n.startsWith("/") || n.startsWith("~/") ? (n.split("/").filter(Boolean).pop() || n) : n;
+// Finder shows ":" in a file name as "/"
+const label = k => k.name && (k.name.startsWith("/") || k.name === "~") ? rootName(k.name) : (isApp(k) ? k.name.replace(/\.app$/, "") : String(k.name ?? "").replace(/:/g, "/"));
+// keep the end of a long name, where "(7).zip" or the date usually is
+function midTrunc(s, n) {
+  s = String(s); if (s.length <= n || n < 12) return s;   // too short to keep both ends: let the label end in "…"
+  const tailHint = (/[\s_-]*\(?\d+\)?(\.[a-z0-9]{1,5})?$|\.[a-z0-9]{1,5}$/i.exec(s) || [""])[0].length;
+  const tail = Math.min(n - 4, Math.max(Math.floor((n - 1) * 0.42), tailHint));
+  return s.slice(0, n - 1 - tail).trimEnd() + "…" + s.slice(s.length - tail).trimStart();
+}
+
+const ICON = {
+  folder: `<svg class="i" viewBox="0 0 16 16" style="width:17px;height:17px"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6h5.6c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/></svg>`,
+  finder: `<svg class="i" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M12 9.5v3c0 .6-.4 1-1 1H3.5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1h3"/></svg>`,
+  open: `<svg class="i" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></svg>`,
+  plus: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2.2"><path d="M8 3.5v9M3.5 8h9"/></svg>`,
+  check: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2.2"><path d="M3.8 8.4 6.6 11 12.2 5"/></svg>`,
+  back: `<svg class="i" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>`,
+  x: `<svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>`,
+  info: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.7M8 5.2v.1"/></svg>`,
+  lock: `<svg class="i lk" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`,
+};
+
+function tile(k, size) {
+  const c = color(k.cat), e = ext(k.name || k.path);
+  const lbl = k.type === "dir" && !isApp(k) ? ICON.folder : esc((e || "file").slice(0, 4).toUpperCase());
+  if (canThumb(k)) return `<span class="tile withimg" style="--c:${c}">${lbl}<img class="${isApp(k) ? "app" : ""}" data-src="${thumbURL(k.path)}" onload="this.classList.add('ok')" onerror="this.remove();this.parentNode&&this.parentNode.classList.remove('withimg')"></span>`;
+  return `<span class="tile" style="--c:${c}">${lbl}</span>`;
+}
+
+/* ---------- thumbnail queue ----------
+   Browsers allow ~6 requests at once per site and a new thumbnail takes ~0.7 s to make, so loading them all at once
+   used to block the folder you just clicked. At most 3 load at a time, in on-screen order; ones no longer shown are skipped. */
+const TQ = { q: [], n: 0, max: 3, hold: 0 };
+function qThumb(img, front) { if (img.dataset.q) return; img.dataset.q = 1; front ? TQ.q.unshift(img) : TQ.q.push(img); pumpThumbs(); }
+function pumpThumbs() {
+  while (!TQ.hold && TQ.n < TQ.max && TQ.q.length) {
+    const img = TQ.q.shift(); if (!img.isConnected || img.getAttribute("src")) continue;
+    TQ.n++; let done = false; const fin = () => { if (done) return; done = true; TQ.n--; pumpThumbs(); };
+    img.addEventListener("load", fin, { once: true }); img.addEventListener("error", fin, { once: true }); setTimeout(fin, 12000);
+    img.src = img.dataset.src;
+  }
+}
+new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) {
+  const front = !!n.closest?.("#tip, #insp");
+  if (n.matches("img[data-src]")) qThumb(n, front); n.querySelectorAll("img[data-src]").forEach(i => qThumb(i, front));
+} }).observe(document.body, { childList: true, subtree: true });
+
+/* ---------- state ---------- */
+let current = "";
+let treeCache = new Map();
+let overview = null, sugg = null, dupes = null, status = null, lastCrumbs = [];
+let focusCat = null;
+let changedOn = false;       // the map shows only what changed since last time
+const picked = new Map();    // path -> size
+const meta = new Map();      // path -> item (for tiles in confirm list)
+let tab = location.hash.slice(1) || "cleanup";
+let booted = false;
+// The caches keep the most recently used entries only, so a long session doesn't grow without end.
+// meta never forgets something that's picked (the tray and the confirm list need it).
+const CAP = { tree: 150, filter: 60, meta: 8000 };
+function remember(map, key, val, cap) {
+  map.delete(key); map.set(key, val);
+  if (map.size > cap) for (const k of map.keys()) { if (map.size <= cap) break; if (map !== meta || !picked.has(k)) map.delete(k); }
+  return val;
+}
+const recall = (map, key) => { const v = map.get(key); if (v !== undefined) { map.delete(key); map.set(key, v); } return v; };
+const keepMeta = (path, item) => remember(meta, path, item, CAP.meta);
+
+/* ---------- selection ---------- */
+function effective() {
+  const paths = [...picked.keys()].sort(), keep = [];
+  for (const p of paths) if (!keep.some(k => p.startsWith(k + "/"))) keep.push(p);
+  return keep;
+}
+function toggle(path, size, on, item) {
+  if (!path) return;
+  if (on === undefined) on = !picked.has(path);
+  if (item) keepMeta(path, item);
+  on ? picked.set(path, size) : picked.delete(path);
+  syncSelection();
+}
+function syncSelection() {
+  const eff = effective(), total = eff.reduce((s, p) => s + picked.get(p), 0);
+  $("tray").classList.toggle("on", eff.length > 0);
+  const ts = $("tray-size"), tsv = fmt(total);
+  if (ts.textContent !== tsv && eff.length) { ts.textContent = tsv; ts.classList.remove("bump"); void ts.offsetWidth; ts.classList.add("bump"); } else if (ts.textContent !== tsv) ts.textContent = tsv;
+  const tl = $("tray-go-l"), want = eff.length === 1 && eff[0] === TRASH() ? "Empty Trash…" : "Move to Trash"; if (tl.textContent !== want) tl.textContent = want;
+  const tc = `${eff.length} item${eff.length === 1 ? "" : "s"}`; if ($("tray-count").textContent !== tc) $("tray-count").textContent = tc;
+  // touch only what changed: a map draw calls this with hundreds of cartridges on screen
+  for (const el of document.querySelectorAll("[data-path]")) {
+    const on = picked.has(el.dataset.path);
+    if (el.tagName === "INPUT") { if (el.checked !== on) el.checked = on; continue; }
+    if (el.classList.contains("sel") === on) continue;
+    el.classList.toggle("sel", on);
+    const pk = el.querySelector(":scope > .pick"); if (pk) pk.innerHTML = on ? ICON.check : ICON.plus;
+  }
+}
+
+const popOnce = el => { if (!el || REDUCED.matches) return; el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); el.addEventListener("animationend", () => el.classList.remove("pop"), { once: true }); };
+
+/* ---------- header ---------- */
+function drawHeader() {
+  if (!status) return;
+  const d = status.disk, bar = $("diskbar"), chips = $("chips");
+  const [n, u] = fmt(d.used, true);
+  $("hero-used").innerHTML = `${chars(n)}<small>${u}</small>`;
+  const low = d.free / d.total < 0.12;
+  const tip = d.purgeable > 3e8 ? ` data-tip="${fmt(d.freeNow)} free now · ${fmt(d.purgeable)} more when macOS clears caches"` : "";
+  $("hero-sub").innerHTML = `used of ${fmt(d.total)} · <b class="${low ? "low" : ""}"${tip}>${fmt(d.free)} free</b>`;
+  bar.innerHTML = ""; chips.innerHTML = "";
+  const seg = (key, lbl, bytes, col, cls) => {
+    if (bytes <= 0) return;
+    const el = document.createElement("div");
+    el.style.flex = `0 0 calc(${(bytes / d.total) * 100}% - 2px)`; el.style.background = col; if (col) el.style.setProperty("--seg", col);
+    el.className = (cls || "") + (focusCat === key ? " on" : ""); el.title = `${lbl} — ${fmt(bytes)}`;
+    if (key === "hidden") { el.dataset.hidden = 1; el.onclick = openHidden; }
+    bar.appendChild(el);
+    const interactive = key && (CAT[key] || key === "hidden");
+    chips.insertAdjacentHTML("beforeend", `<${interactive ? "button" : "span"} class="chip ${interactive ? "" : "static"} ${focusCat === key ? "on" : ""}" ${interactive ? (key === "hidden" ? "data-hidden" : `data-cat="${key}"`) : ""}>
+      <i style="background:${cls === "free" ? "var(--rest1)" : col}"></i>${esc(focusCat === key && focusKinds.size ? KINDS.filter(k => focusKinds.has(k.id)).map(k => k.label).join(", ") : lbl)} <b class="num">${fmt(focusCat === key && focusKinds.size ? KINDS.filter(k => focusKinds.has(k.id)).reduce((s, k) => s + k.bytes, 0) : bytes)}</b></${interactive ? "button" : "span"}>`);
+  };
+  let scanned = 0;
+  if (overview) for (const [c, v] of Object.entries(overview.cats).sort((a, b) => b[1] - a[1])) { scanned += v; seg(c, CAT[c], v, color(c)); }
+  seg("hidden", "macOS keeps this", d.used - scanned, css("--c-system"));
+  seg("", "Free", d.free, "", "free");
+  bar.classList.toggle("focus", !!focusCat);
+  drawSince();
+  if (!headerIntro && overview) {
+    headerIntro = true;
+    if (!REDUCED.matches) {
+      [...bar.children].forEach((el, i) => el.style.setProperty("--d", i * 45 + "ms"));
+      [...chips.children].forEach((el, i) => el.style.setProperty("--i", i));
+      const parts = [bar, chips, document.querySelector(".hero")];
+      parts.forEach(el => el.classList.add("boot")); setTimeout(() => parts.forEach(el => el.classList.remove("boot")), 1500);
+    }
+  }
+}
+let headerIntro = false;
+// "+4.2 GB since Thursday": the disk's change since the comparison scan. Click it to see only what changed;
+// the hint names what moved most.
+function drawSince() {
+  const el = $("since"), c = overview?.changes, show = !!(c && c.since && c.churn >= 1e7);
+  if (!show) changedOn = false;
+  el.hidden = !show; if (!show) return;
+  const amt = c.used ?? c.net;
+  el.className = "chip" + (changedOn ? " on" : "");
+  el.innerHTML = `<i style="background:var(${amt < 0 ? "--c-down" : "--c-up"})"></i><b class="num">${sgn(amt)}</b> since ${esc(sinceDay(c.since))}`;
+  // "com.example.Browser" reads as "Browser"
+  const short = n => /^[a-z]{2,5}(\.[\w-]+){2,}$/i.test(n) && !/\.(app|photoslibrary)$/i.test(n) ? n.split(".").pop() : label({ name: n }).replace(/\.photoslibrary$/, "");
+  el.dataset.tip = c.top.map(m => `${short(m.name)} ${sgn(m.d)}`).join(" · ") || "See what changed";
+}
+$("since").onclick = () => setChanged(!changedOn);
+function setChanged(on) {
+  changedOn = on; if (on) { focusCat = null; focusKinds = new Set(); closeKinds(); }
+  drawHeader(); markOpenChip(); open(current, null, "filter");
+}
+$("chips").addEventListener("click", e => {
+  if (e.target.closest("[data-hidden]")) return openHidden();
+  const b = e.target.closest("button[data-cat]"); if (!b) return;
+  if (!$("kpop").hidden && $("kpop")._cat === b.dataset.cat) return closeKinds();
+  if (openKinds(b, b.dataset.cat)) return;
+  closeKinds(); setFocus(focusCat === b.dataset.cat ? null : b.dataset.cat);
+});
+
+/* ---------- treemap ---------- */
+function squarify(items, x, y, w, h, wt = wOf) {
+  const out = []; items = items.filter(i => wOf(i) > 0);
+  const total = items.reduce((s, i) => s + wt(i), 0);
+  if (!total || w <= 0 || h <= 0) return out;
+  const scale = (w * h) / total;
+  let row = []; const rest = items.map(i => ({ item: i, a: wt(i) * scale }));
+  const worst = (r, side) => {
+    const s = r.reduce((t, i) => t + i.a, 0), mx = Math.max(...r.map(i => i.a)), mn = Math.min(...r.map(i => i.a));
+    return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
+  };
+  const layout = () => {
+    const s = row.reduce((t, i) => t + i.a, 0);
+    if (w >= h) { const cw = s / h; let cy = y; for (const r of row) { const rh = r.a / cw; out.push({ ...r, x, y: cy, w: cw, h: rh }); cy += rh; } x += cw; w -= cw; }
+    else { const rh = s / w; let cx = x; for (const r of row) { const cw = r.a / rh; out.push({ ...r, x: cx, y, w: cw, h: rh }); cx += cw; } y += rh; h -= rh; }
+    row = [];
+  };
+  while (rest.length) {
+    const side = Math.min(w, h), next = rest[0];
+    if (!row.length || worst(row, side) >= worst([...row, next], side)) { row.push(next); rest.shift(); }
+    else layout();
+  }
+  if (row.length) layout();
+  return out;
+}
+
+let filterCache = new Map();
+const filterMask = () => focusKinds.size ? [...focusKinds].reduce((m, id) => m | (1 << id), 0) : KINDS.filter(k => k.cat === focusCat).reduce((m, k) => m | (1 << k.id), 0);
+const filterName = () => focusKinds.size ? KINDS.filter(k => focusKinds.has(k.id)).map(k => k.label).join(", ") : CAT[focusCat];
+function getFilter(path) {
+  const key = `${path}|${focusCat}|${filterMask()}`;
+  return recall(filterCache, key) || remember(filterCache, key, api(`/api/filter?path=${encodeURIComponent(path)}&cat=${focusCat}&mask=${filterMask()}`)
+    .catch(e => { filterCache.delete(key); throw Object.assign(e instanceof Error ? e : new Error(String(e)), { filter: true }); }), CAP.filter);
+}
+function getChanged(path) {
+  const key = "changed|" + path;
+  return recall(filterCache, key) || remember(filterCache, key, api(`/api/changed?path=${encodeURIComponent(path)}`)
+    .catch(e => { filterCache.delete(key); throw Object.assign(e instanceof Error ? e : new Error(String(e)), { filter: true }); }), CAP.filter);
+}
+// what the map shows for a folder: its contents; with a filter on, only the matching files inside it; with Changed on,
+// only what grew, shrank, is new or was removed
+async function getView(path) {
+  const data = await getTree(path);
+  if (changedOn) { const c = await getChanged(path); return { ...data, node: Object.assign(c.node, { sys: c.sys }), full: data.node, changed: c }; }
+  if (!focusCat) return data;
+  const f = await getFilter(path);
+  return { ...data, node: f.node, full: data.node, filter: f };
+}
+async function getTree(path) {
+  return recall(treeCache, path) || remember(treeCache, path, api(`/api/tree?depth=2&path=${encodeURIComponent(path)}`).catch(e => { treeCache.delete(path); throw e; }), CAP.tree);
+}
+
+// Navigation draws the new folder as soon as its data is in (a few ms) and animates the old layer away on top of it.
+// Requests made meanwhile are queued, not dropped, so three quick Escs climb three levels.
+let navving = false;
+const navQ = [], hist = { back: [], fwd: [] };
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)");
+function open(path, fromEl, how) { return new Promise(res => { navQ.push({ path, fromEl, how, res }); if (!navving) runNav(); }); }
+async function runNav() {
+  navving = true;
+  try {
+    while (navQ.length) {
+      const n = navQ.shift();
+      try { const path = typeof n.path === "function" ? n.path() : n.path; if (path != null) await doOpen(path, n.fromEl, n.how); }
+      catch (e) { console.error(e); }
+      finally { n.res(); }
+    }
+  } finally { navving = false; }
+}
+let mapIntro = false;
+const dialogUp = () => !$("confirm").hidden || !$("hidden").hidden || !$("access").hidden;
+const goUp = () => dialogUp() ? Promise.resolve() : open(() => lastCrumbs.length > 1 ? lastCrumbs.at(-2).path : null);
+const goBack = () => dialogUp() ? Promise.resolve() : open(() => hist.back.length ? hist.back.at(-1) : null, null, "back");
+const goForward = () => dialogUp() ? Promise.resolve() : open(() => hist.fwd.length ? hist.fwd.at(-1) : null, null, "fwd");
+async function doOpen(path, fromEl, how) {
+  if (V.open) closeViewer(true);
+  closeInsp();
+  const map = $("map");
+  map.querySelectorAll(".layer").forEach(l => l.getAnimations({ subtree: true }).forEach(a => a.finish()));   // a click mid-motion lands the last one first
+  await null;
+  const old = map.querySelector(".layer:not(.leaving)"), from = current;
+  let data;
+  try { data = await getView(path); }
+  catch (e) {
+    if (!(e.filter && (focusCat || changedOn))) { toast("Couldn't open that folder: " + esc(e.message)); return; }
+    const what = changedOn ? "Couldn't show changes: " : "Couldn't filter: ";
+    focusCat = null; focusKinds = new Set(); changedOn = false; drawHeader(); if (!$("kpop").hidden) $("kpop")._draw?.(); markOpenChip();
+    toast(what + esc(e.message), 4000);
+    try { data = await getView(path); } catch (e2) { toast("Couldn't open that folder: " + esc(e2.message)); return; }
+  }
+  const quiet = how === "soft" || how === "filter";
+  if (path !== current && !quiet) {
+    if (how === "back") { hist.back.pop(); hist.fwd.push(current); }
+    else if (how === "fwd") { hist.fwd.pop(); hist.back.push(current); }
+    else if (booted && map.querySelector(".layer, .emptymap")) { hist.back.push(current); hist.fwd.length = 0; }
+  }
+  const into = from === "" ? path !== "" : path.startsWith(from + "/"), outOf = path === "" ? from !== "" : from.startsWith(path + "/");
+  const animate = old && (into || outOf) && path !== from && !REDUCED.matches && !quiet;
+  const intro = !old && !mapIntro && !REDUCED.matches; mapIntro = true;
+  const fa = how === "filter" && !REDUCED.matches ? "sift" : "";
+  if (old && quiet && !REDUCED.matches) {   // a fresh map from a quiet rescan (or a filter): the old one goes on top
+    old.classList.add("leaving");
+    if (fa) { old.classList.add("fx-" + fa); setTimeout(() => old.remove(), 260); }
+    else { old.style.transition = "opacity .24s ease"; requestAnimationFrame(() => old.style.opacity = "0"); setTimeout(() => old.remove(), 300); }
+  }
+  // where the folder sits on the outer map: the cartridge clicked, or the one on the path between the two levels
+  const deep = into ? path : from, outer = into ? old : null;
+  const spot = (layer, p) => [...(layer?.querySelectorAll(".b[data-path]") || [])].filter(b => p === b.dataset.path || p.startsWith(b.dataset.path + "/")).sort((a, b) => b.dataset.path.length - a.dataset.path.length)[0];
+  let rect = null;
+  if (animate && into) { const el = fromEl?.isConnected ? fromEl : spot(outer, deep); if (el) rect = relRect(el, map); }
+  if (animate) old.classList.add("leaving");
+  current = path;
+  drawCrumbs(data);
+  drawMap(data.node, intro ? "boot" : fa ? "f-" + fa : "");
+  if (animate) {
+    const fresh = map.querySelector(".layer:not(.leaving)");
+    if (!fresh) old.remove();
+    else { if (outOf) { const el = spot(fresh, deep); if (el) rect = relRect(el, map); } zoom(map, old, fresh, rect, into); }
+  }
+  if (tab === "folder") drawPane();
+}
+const relRect = (el, map) => { const r = el.getBoundingClientRect(), m = map.getBoundingClientRect(); return { x: r.left - m.left, y: r.top - m.top, w: r.width, h: r.height }; };
+// Opening a folder: its cartridge opens up to fill the map with the folder inside, grown from that spot at its true
+// proportions (never stretched) while the map behind stays put and fades. Going up plays the same thing backwards.
+// Only transforms and opacity move, so the GPU does it without repainting: the window (.layer) scales unevenly to the
+// cartridge's shape and its contents (.lc) get the opposite scale, which nets out to an even zoom. Thumbnails wait.
+const NAV_MS = 300, NAV_EASE = "cubic-bezier(.2,.75,.15,1)", navEase = bezier(.2, .75, .15, 1);
+function bezier(x1, y1, x2, y2) {
+  const f = (u, a, b) => 3 * (1 - u) * (1 - u) * u * a + 3 * (1 - u) * u * u * b + u * u * u;
+  return t => { let u = t; for (let i = 0; i < 8; i++) { const d = 3 * (1 - u) * (1 - u) * x1 + 6 * (1 - u) * u * (x2 - x1) + 3 * u * u * (1 - x2); if (Math.abs(d) < 1e-6) break; u = Math.min(1, Math.max(0, u - (f(u, x1, x2) - t) / d)); } return f(u, y1, y2); };
+}
+function zoom(map, old, fresh, r, into) {
+  const W = map.clientWidth, H = map.clientHeight, inner = into ? fresh : old, outer = into ? old : fresh;
+  const opt = { duration: NAV_MS, fill: "both" }, anims = [];
+  TQ.hold++;
+  inner.style.zIndex = 2; outer.style.zIndex = 1;
+  if (r && r.w > 4 && r.h > 4) {
+    const s0 = Math.max(r.w / W, r.h / H), tx0 = r.x + r.w / 2 - W * s0 / 2, ty0 = r.y + r.h / 2 - H * s0 / 2;
+    const win = [], cnt = [], N = 24;
+    for (let i = 0; i <= N; i++) {
+      const p = into ? navEase(i / N) : 1 - navEase(i / N), L = (a, b) => a + (b - a) * p;   // going up moves fast first too
+      const cx = L(r.x, 0), cy = L(r.y, 0), wx = L(r.w, W), wy = L(r.h, H), sc = L(s0, 1), tx = L(tx0, 0), ty = L(ty0, 0);
+      win.push({ offset: i / N, transform: `translate(${cx}px, ${cy}px) scale(${wx / W}, ${wy / H})`, ...(into ? {} : { opacity: i / N < .4 ? 1 : 1 - (i / N - .4) / .6 }) });
+      cnt.push({ offset: i / N, transform: `translate(${(tx - cx) * W / wx}px, ${(ty - cy) * H / wy}px) scale(${sc * W / wx}, ${sc * H / wy})` });
+    }
+    const lc = inner.querySelector(".lc");
+    inner.style.willChange = lc.style.willChange = "transform";
+    anims.push(inner.animate(win, opt), lc.animate(cnt, opt));
+    outer.style.transformOrigin = `${r.x + r.w / 2}px ${r.y + r.h / 2}px`;
+  } else {
+    inner.style.transformOrigin = outer.style.transformOrigin = "50% 50%";
+    anims.push(inner.animate(into ? [{ transform: "scale(.96)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }] : [{ transform: "scale(1)", opacity: 1 }, { transform: "scale(.96)", opacity: 0 }], { ...opt, easing: NAV_EASE }));
+  }
+  outer.style.willChange = "transform, opacity";
+  anims.push(outer.animate(into ? [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(1.035)" }]
+                                 : [{ opacity: .35, transform: "scale(1.035)" }, { opacity: 1, transform: "scale(1)" }], { ...opt, easing: into ? "ease-in" : NAV_EASE }));
+  Promise.all(anims.map(a => a.finished)).catch(() => {}).then(() => {
+    old.remove(); anims.forEach(a => a.cancel());
+    for (const el of [fresh, fresh.querySelector(".lc")]) el.style.zIndex = el.style.willChange = el.style.transformOrigin = "";
+    TQ.hold--; pumpThumbs();
+  });
+}
+
+const C_SEP = `<svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M6 3.5 10.5 8 6 12.5"/></svg>`;
+function drawCrumbs(data) {
+  lastCrumbs = data.crumbs;
+  $("crumbs").classList.remove("fit");
+  const c = $("crumbs"), parent = data.crumbs.length > 1 ? data.crumbs.at(-2).path : null;
+  c.innerHTML = `<button class="back" ${parent === null ? "disabled" : ""} aria-label="Up a folder">${ICON.back}</button>`;
+  c.querySelector(".back").onclick = () => parent !== null && goUp();
+  data.crumbs.forEach((cr, i) => {
+    if (i) c.insertAdjacentHTML("beforeend", `<span class="sep">${C_SEP}</span>`);
+    const b = document.createElement("button");
+    b.className = "c" + (i === data.crumbs.length - 1 ? " cur" : ""); b.textContent = rootName(cr.name);
+    b.onclick = () => open(cr.path); c.appendChild(b);
+  });
+  const f = data.filter, ch = data.changed;
+  c.insertAdjacentHTML("beforeend", ch
+    ? `<span class="meta fmeta"><span class="fk"><i style="background:var(${ch.net < 0 ? "--c-down" : "--c-up"})"></i>Changed since ${esc(sinceDay(ch.since))}</span><b class="num">${sgn(ch.net)}</b><button class="fx" data-tip="Show everything" aria-label="Show everything">${ICON.x}</button></span>`
+    : f
+    ? `<span class="meta fmeta"><span class="fk"><i style="background:${color(focusCat)}"></i>${esc(filterName())}</span><span class="num">${f.count.toLocaleString()} ${{ app: "app", cache: "folder" }[focusCat] || "file"}${f.count === 1 ? "" : "s"}</span><b class="num">${fmt(f.bytes)}</b><button class="fx" data-tip="Show everything" aria-label="Show everything">${ICON.x}</button></span>`
+    : `<span class="meta" data-tip="${data.node.count.toLocaleString()} files"><b class="num">${fmt(data.node.size)}</b></span>`);
+  c.querySelector(".fx")?.addEventListener("click", () => changedOn ? setChanged(false) : setFocus(null));
+  badge("b-folder", fmt((data.full || data.node).size));
+  // too long for the row: hide middle levels behind "…", like Finder's path bar
+  const cs = [...c.querySelectorAll(".c")];
+  let hidden = [];
+  for (let i = 1; i < cs.length - 1 && c.scrollWidth > c.clientWidth; i++) { cs[i].hidden = true; cs[i].previousElementSibling.hidden = true; hidden.push(data.crumbs[i]); }
+  c.classList.add("fit");   // only now may the current name shrink, if it still doesn't fit
+  if (hidden.length) {
+    const more = document.createElement("button"); more.className = "c more"; more.textContent = "…"; more.title = hidden.map(h => rootName(h.name)).join(" › ");
+    more.onclick = e => { e.stopPropagation(); crumbMenu(more, hidden); };
+    cs[0].after(Object.assign(document.createElement("span"), { className: "sep", innerHTML: C_SEP }), more);
+  }
+  if (NATIVE) NATIVE.postMessage({ path: "/native/title", body: { title: rootName(data.crumbs.at(-1).name) || "Rumi" } }).catch(() => {});
+}
+function crumbMenu(anchor, items) {
+  document.querySelector(".crumbmenu")?.remove();
+  const m = document.createElement("div"); m.className = "crumbmenu";
+  items.forEach(h => { const b = document.createElement("button"); b.textContent = rootName(h.name); b.onclick = () => { m.remove(); open(h.path); }; m.appendChild(b); });
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect(); m.style.left = r.left + "px"; m.style.top = r.bottom + 6 + "px";
+  setTimeout(() => addEventListener("mousedown", function off(e) { if (!m.contains(e.target)) { m.remove(); removeEventListener("mousedown", off); } }), 0);
+}
+
+// Applying a filter "sifts": the old map sinks away and the matches rise folder by folder, their files popping in.
+function drawMap(node, anim) {
+  const map = $("map");
+  map.querySelectorAll(".layer:not(.leaving), .emptymap").forEach(e => e.remove());
+  // the layer is the window the folder is seen through; its .lc holds the cartridges (they move separately when a folder opens)
+  const layer = document.createElement("div"); layer.className = "layer" + (anim ? " " + anim : "");
+  const lc = layer.appendChild(Object.assign(document.createElement("div"), { className: "lc" }));
+  const C = LAYOUT, W = map.clientWidth, H = map.clientHeight, G = C.gap;
+  // "f": a filter's matches. "c": what changed. Both show only some of the folder, in tiles big enough to read.
+  const mode = node.name === "matches" ? "f" : node.name === "changes" ? "c" : "";
+  let kids = (node.children || []).filter(k => wOf(k) > 0);
+  // the top level also shows the space outside Home and Applications: one locked cartridge standing at the right, true to size
+  // (in the Changed view: how much that space grew or shrank, when it moved by half a gigabyte or more)
+  const hidK = mode === "c" ? (node.path === "" && Math.abs(node.sys || 0) >= 5e8 ? { type: "hidden", name: "macOS keeps this", size: Math.abs(node.sys), d: node.sys, ch: 1, cat: "system" } : null)
+    : node.name === "This Mac" && hiddenBytes() > 1e9 ? { type: "hidden", name: "macOS keeps this", size: hiddenBytes(), cat: "system" } : null;
+  if (!kids.length && mode === "c") {
+    map.insertAdjacentHTML("afterbegin", `<div class="emptymap"><div>${Rumi.svg("happy", { size: 104 })}<b>No changes here</b><button class="btn small" style="margin-top:12px">Show everything</button></div></div>`);
+    map.querySelector(".emptymap button").onclick = () => setChanged(false);
+    return;
+  }
+  if (!kids.length && mode === "f") {
+    map.insertAdjacentHTML("afterbegin", `<div class="emptymap"><div>${Rumi.svg("empty", { size: 104 })}<b>No ${esc(filterName().toLowerCase())} here</b><button class="btn small" style="margin-top:12px">Show everything</button></div></div>`);
+    map.querySelector(".emptymap button").onclick = () => setFocus(null);
+    return;
+  }
+  if (!kids.length) {
+    map.insertAdjacentHTML("afterbegin", `<div class="emptymap">${node.denied
+      ? `<div>${Rumi.svg("sleep", { size: 104 })}<b>Private folder</b>${NATIVE ? `<button class="btn small" style="margin-top:12px" onclick="showAccess()">Give access…</button>` : ""}</div>`
+      : `<div>${Rumi.svg("empty", { size: 104 })}<b>Empty</b></div>`}</div>`);
+    return;
+  }
+  // filtered maps: small files would be slivers, so room goes by the square root of size and "N more" stays small
+  const inWt = !mode ? () => wOf : list => {
+    const shown = list.filter(c => c.type !== "rest").map(c => Math.sqrt(wOf(c))).sort((a, b) => a - b), med = shown[shown.length >> 1] || 1;
+    return k => k.type === "rest" ? Math.min(Math.sqrt(wOf(k)), med * 2) : Math.sqrt(wOf(k));
+  };
+  // …and only as many as can show a name: the rest fold into one "N more" (in a folder, it opens that folder)
+  const fit = (list, area, each, openPath) => {
+    const cap = Math.max(2, Math.floor(area / each));
+    if (!mode || list.length <= cap) return list;
+    const keep = list.filter(c => c.type !== "rest").slice(0, cap - 1), drop = list.filter(c => !keep.includes(c));
+    const n = drop.reduce((a, c) => a + (c.type === "rest" ? c.n || (mode === "c" ? 1 : 0) : c.matches || 1), 0);
+    return [...keep, { type: "rest", cat: "other", name: `${n.toLocaleString()} more`, size: drop.reduce((a, c) => a + wOf(c), 0), n, open: openPath,
+      ...(mode === "c" ? { ch: 1, d: drop.reduce((a, c) => a + (c.type === "gone" ? -c.size : c.new ? c.size : c.d || 0), 0) } : {}) }];
+  };
+  const wt = inWt(kids);
+  const place = r => {
+    const k = r.item, x = r.x + G / 2, y = r.y + G / 2, w = r.w - G, h = r.h - G;
+    let container = isFolderK(k) && k.children && k.children.length && w > 96 && h > 74, ks = null;
+    const head = C.head, pad = C.pad, ig = C.igap;
+    if (container) {
+      ks = fit(k.children.filter(c => wOf(c) > 0), (w - pad * 2) * (h - head - pad), 96 * 66, k.path);
+      if (!mode) ks = readable(ks, pad, head, w - pad * 2, h - head - pad, wOf, ig, k.path);
+      if (!ks) container = false;   // nothing in it is big enough to name: one folder cartridge instead of a tray of specks
+    }
+    const el = block(k, x, y, w, h, container ? "container" : "leaf", 0, node);
+    if (container) {
+      squarify(ks, pad, head, w - pad * 2, h - head - pad, inWt(ks)).forEach((ir, i) => {
+        const ix = ir.x, iy = ir.y, iw = ir.w, ih = ir.h;
+        if (iw - ig > 0 && ih - ig > 0) el.appendChild(block(ir.item, ix + ig / 2, iy + ig / 2, iw - ig, ih - ig, "leaf inner", i, k));
+      });
+    }
+    lc.appendChild(el);
+  };
+  let aw = W - G * 2, main = kids = fit(kids, W * H, 150 * 110, null);
+  if (hidK && kids.length) {
+    // the biggest folder (Home) keeps the left; the others sit in a right-hand column above the locked cartridge
+    const sorted = [...kids].sort((a, b) => wt(b) - wt(a)), side = sorted.slice(1), sideSum = side.reduce((a, k) => a + wt(k), 0), hw = wt(hidK);
+    const cw = Math.round(aw * (hw + sideSum) / (hw + sideSum + wt(sorted[0]))), colH = H - G * 2;
+    aw -= cw; main = [sorted[0]];
+    const topH = side.length ? Math.max(Math.round(colH * sideSum / (sideSum + hw)), Math.min(110, colH * 0.3)) : 0;
+    if (side.length) squarify(side, G + aw, G, cw, topH, wt).forEach(place);
+    lc.appendChild(block(hidK, G + aw + G / 2, G + topH + G / 2, cw - G, colH - topH - G, "leaf", 0, node));
+  }
+  if (!mode && !hidK) main = readable(main, G, G, aw, H - G * 2, wt, G, null) || main;
+  squarify(main, G, G, aw, H - G * 2, wt).forEach(place);
+  map.insertBefore(layer, map.firstChild); map._wh = W + "x" + H;
+  if (anim === "f-sift") {   // folder by folder, then the files inside each pop in
+    [...lc.children].forEach((el, i) => {
+      el.style.setProperty("--d", Math.min(i, 10) * 40 + "ms");
+      el.querySelectorAll(":scope > .b").forEach((c, j) => c.style.setProperty("--d", Math.min(i, 10) * 40 + 90 + Math.min(j, 16) * 14 + "ms"));
+    });
+    setTimeout(() => layer.classList.remove("f-sift"), 900);
+  }
+  if (anim === "boot") {   // every cartridge slots in, sweeping from the top left
+    const mr = map.getBoundingClientRect();
+    layer.querySelectorAll(".b").forEach(el => { const r = el.getBoundingClientRect(); el.style.setProperty("--d", Math.round(((r.left - mr.left) / W * 0.6 + (r.top - mr.top) / H * 0.4) * 220) + "ms"); });
+    setTimeout(() => layer.classList.remove("boot"), 1000);
+  }
+  syncSelection();
+}
+
+function block(k, x, y, w, h, cls, i, par) {
+  const el = document.createElement("div");
+  const rest = k.type === "rest", hid = k.type === "hidden", ch = !!k.ch, gone = k.type === "gone";
+  // Changed view: two colours only. Orange grew or is new, green shrank, a dashed empty slot was removed.
+  const dir = !ch || rest ? "" : gone ? "gone" : k.new || (k.d || 0) >= 0 ? "up" : "down";
+  el.className = "b " + (rest ? "rest" : cls) + (hid ? " locked" : "") + (ch ? " chg " + dir : "");
+  el.dataset.cat = k.cat;
+  let bc = hid ? css("--c-locked") || "#d6d3cb" : dir === "gone" ? "transparent" : dir ? css(dir === "up" ? "--c-up" : "--c-down") : color(k.cat);
+  if (cls.includes("inner") && !rest && !gone) { const v = [0, 7, -7, 4][i % 4]; bc = `color-mix(in oklab, ${bc}, ${v > 0 ? "white" : "black"} ${Math.abs(v)}%)`; }
+  const hv = hash(k.path || k.name), hv2 = hash((k.name || "") + "~");
+  el.style.cssText = `left:${x}px;top:${y}px;width:${Math.max(0, w)}px;height:${Math.max(0, h)}px;--bc:${bc};--cx:${Math.round(15 + hv * 70)}%;--cy:${Math.round(15 + hv2 * 70)}%;--ring:${(6 + hv * 6).toFixed(1)}px;--rot:${Math.round(hv2 * 180)}deg`;
+  if (!rest && !ch && !cls.includes("container") && isLight(color(k.cat))) el.classList.add("lt");
+  if (w < 100 || h < 70) el.classList.add("sm");
+  // tiers by the room a line of text needs: wide-but-low carts still get a one-line name, narrow-tall ones a spine
+  if (w < 46 || h < 22 || (h < 34 && w < 90)) el.classList.add("xs");
+  else if (w < 72 && h >= 72 && h > w * 1.4 && !rest) el.classList.add("spine");
+  if (rest && w < 74) el.classList.add("nolbl");
+  else if (h < 48) el.classList.add("short");
+  const C = LAYOUT;
+  if (k.path) { el.dataset.path = k.path; keepMeta(k.path, k); }
+  if (k.type === "dir" && k.km != null) el.dataset.km = k.km;
+  let name = rest ? (ch ? `${k.name} · ${sgn(k.d || 0)}` : `${String(k.name).replace(/ items$/, "")} · ${fmt(k.size)}`) : label(k);
+  // the stripe: on a tray it's a line under the name; on a folder cartridge it sits on the label, when there's room below the size
+  const stripe = !ch && isFolderK(k) && Array.isArray(k.mx);
+  if (cls.includes("container")) {
+    el.innerHTML = `<div class="hd">${stripe ? "" : "<i></i>"}<span class="n">${esc(name)}</span><span class="s num">${ch ? chAmt(k) : fmt(k.size)}</span></div>${stripe ? mixHTML(k, "mixline") : ""}`;
+  } else {
+    // thumbnails: real previews for photos/videos, icons for apps
+    if (canThumb(k) && w > 44 && h > 40) {
+      if (isApp(k)) {
+        const [top, bottom] = C.iconBox(w, h), room = h - top - bottom;
+        const s = Math.round(Math.min(C.iconMax, w * C.iconW, room * 0.9));
+        if (s >= 20) el.classList.add("hasic");
+        if (s >= 20) el.insertAdjacentHTML("beforeend", `<img class="ic" width="${s}" height="${s}" style="top:${top + room / 2}px" data-src="${thumbURL(k.path)}" onload="this.classList.add('ok')" onerror="this.remove()">`);
+      } else if (PHOTO_EXT.has(ext(k.name)) || ext(k.name) === "pdf") {
+        el.insertAdjacentHTML("beforeend", `<img class="ph" data-src="${thumbURL(k.path)}" onload="this.classList.add('ok');this.parentNode.classList.add('hasph')" onerror="this.remove()">`);
+      }
+    }
+    // names wrap only at . _ - and spaces; a word too long for the label stays on one line with an ellipsis
+    const sm = w < 100 || h < 70, cpl = Math.floor((w - (sm ? 18 : 36)) / (sm ? 7.8 : 8.6));   // the rounded bold face is wide
+    if (Math.max(...String(name).split(/[\s._-]+/).map(t => t.length + 1)) > cpl) el.classList.add("one");
+    const tier = el.classList, lines = tier.contains("one") || tier.contains("short") || (!sm && h <= 120) ? 1 : 2;
+    const cap = tier.contains("spine") ? Math.floor((h - 26) / 6.6) : cpl * lines;
+    if (!rest && name.length > cap) {
+      const room = Math.floor(cap * (lines > 1 ? 0.86 : 0.97));
+      // too short to keep both ends, and it starts like its neighbour: keep the end, where they differ
+      const lead = sharedLead(par, name);
+      if (room < 12 && lead >= room - 1) {
+        const differs = name.slice(lead), tail = differs.length <= room - 3 ? differs : name.slice(-Math.max(3, room - 1)), head = room - 1 - tail.length;
+        name = (head >= 2 ? name.slice(0, head) : "") + "…" + tail;
+      } else name = midTrunc(name, room);
+    }
+    const nameHTML = esc(name).replace(/([._-])/g, "$1<wbr>");
+    // the label: a name, and its size on a chip when it fits. A heading only where colour can't say it (Locked, and the
+    // Changed view's Grew / New / Shrank / Removed). The Changed view keeps its one big signed number on roomy cartridges.
+    const kind = hid ? ICON.lock + (ch ? chKind(k) : "Locked") : ch && !rest ? esc(chKind(k)) : "";
+    const big = ch && w > 150 && h > 110 && !rest;
+    const extra = !ch && hid && w > 150 && h > 150 ? hiddenLabel(h) : "";
+    if (w > 42 && h > 20) el.insertAdjacentHTML("beforeend", `<div class="lbl"><span class="k">${kind}</span><span class="n">${nameHTML}</span>${extra}${(ch || sm ? h > 40 : h >= 88) && w > 60 && !big ? `<span class="s num">${ch ? chAmt(k) : fmt(k.size)}</span>` : ""}</div>`);
+    if (big) {
+      const fs = Math.round(Math.max(18, Math.min(38, Math.min(w, h) / 5.5)));
+      const [bn, bu] = fmt(k.type === "gone" || k.new ? k.size : Math.abs(k.d || 0), true);
+      el.insertAdjacentHTML("beforeend", `<div class="bigsz num" style="font-size:${fs}px;--fs:${fs}px">${chars(chAmt(k)[0] + bn)}<span class="u">&nbsp;${bu}</span></div>`);
+    }
+    if (stripe && !rest && (sm ? w >= 60 && h >= 72 : h >= 128)) el.insertAdjacentHTML("beforeend", mixHTML(k, "mixbar"));
+  }
+  if (k.path && w > 34 && h > 34 && !ownerOf(k.path)) {
+    const p = document.createElement("button"); p.className = "pick"; p.innerHTML = ICON.plus; p.setAttribute("aria-label", "Add to Clean up");
+    p.onclick = e => { e.stopPropagation(); toggle(k.path, k.size, undefined, k); popOnce(p); };
+    el.appendChild(p);
+  }
+  if (hid) {
+    el.onclick = e => { e.stopPropagation(); $("tip").hidden = true; openHidden(); };
+    el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); openHidden(); };
+    return el;
+  }
+  if (rest && k.open) { el.classList.add("dir"); el.onclick = e => { e.stopPropagation(); open(k.open, el.parentElement); }; }
+  else if (rest && !ch) el.onclick = e => { e.stopPropagation(); tab = "folder"; $("pane").scrollTop = 0; drawPane(true); };
+  if (!rest) {
+    // apps and libraries (Photos, Final Cut…) are one thing: they get a details card, not a way inside
+    const drill = k.type === "dir" && k.hasKids && !isApp(k) && !k.pkg;
+    if (drill && !cls.includes("container")) el.classList.add("dir");
+    el.onclick = e => { e.stopPropagation(); $("tip").hidden = true; if (drill) { closeInsp(); open(k.path, el); } else if (viewable(k)) { closeInsp(); openViewer(k, el); } else if (k.path) inspect(k, el); };
+    el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); if (k.path) contextMenu(k.path); };
+    if (drill) el.onmouseenter = () => { clearTimeout(pre); pre = setTimeout(() => getView(k.path).catch(() => {}), 150); };
+  }
+  el.onmousemove = e => { e.stopPropagation(); hoverTip(e, k); };
+  el.onmouseleave = () => { $("tip").hidden = true; clearTimeout(pre); };
+  return el;
+}
+let pre;
+// the hover card shows at once (no delay); its size is measured only when its content changes, not on every move
+function hoverTip(e, k) {
+  const t = $("tip");
+  if (!$("insp").hidden) { t.hidden = true; return; }
+  let fresh = t.hidden;
+  if (t.dataset.k !== (k.path || k.at || k.name)) {
+    fresh = true;
+    t.dataset.k = k.path || k.at || k.name;
+    const rest = k.type === "rest", gone = k.type === "gone", day = status?.since ? ` since ${esc(sinceDay(status.since))}` : "";
+    // since last time: new, removed, or by how much it grew or shrank (1 MB and up)
+    const moved = !day || rest ? "" : gone ? `<div class="k chl down">Removed${day}</div>` : k.new ? `<div class="k chl up">New${day}</div>`
+      : Math.abs(k.d || 0) >= 1e6 ? `<div class="k chl ${k.d < 0 ? "down" : "up"}">${sgn(k.d)}${day}</div>` : "";
+    t.innerHTML = `${rest ? `<span class="tile" style="--c:var(--c-other)">…</span>` : tile(k)}
+      <div style="min-width:0"><div class="n">${esc(label(k))}</div><div class="s num">${fmt(k.size)}</div></div>
+      <div class="p">${rest ? (k.ch ? "Smaller changes, grouped." : k.open ? "Smaller items, grouped. Click to open the folder." : "Smaller items, grouped. Click to list them.") : esc(tilde(k.path || k.at))}</div>
+      ${rest || gone ? "" : `<div class="k">${k.type === "dir" && !isApp(k) ? `${(k.count || 0).toLocaleString()} files · ` : ""}${CAT[k.cat] || "Other"}${k.mtime ? ` · modified ${ago(k.mtime)}` : ""}</div>`}${moved}`;
+  }
+  if (fresh) { t.hidden = false; t._w = t.offsetWidth; t._h = t.offsetHeight; }
+  const x = Math.min(e.clientX + 16, innerWidth - t._w - 12), y = Math.min(e.clientY + 18, innerHeight - t._h - 12);
+  t.style.left = x + "px"; t.style.top = y + "px";
+}
+
+/* ---------- side panel ---------- */
+function row(o) {
+  // a row shows the name; where it is (the full path) is in the hover hint
+  const { path, size, title, sub, why, tag, tagText, rtl, max, sizeNote, item, open: canOpen } = o;
+  keepMeta(path, item);
+  const owner = ownerOf(path);
+  return `<div class="row${owner ? " locked" : ""}" ${owner ? "" : `data-row="${esc(path)}"`} data-size="${size}">
+    ${owner ? `<span class="lock" title="Part of ${esc(owner)}"><svg class="i" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg></span>`
+            : `<input type="checkbox" aria-label="Add ${esc(title)} to Clean up" data-path="${esc(path)}" data-size="${size}" ${picked.has(path) ? "checked" : ""}>`}
+    ${path === TRASH() ? `<span class="tile" style="--c:var(--c-other)"><svg class="i" viewBox="0 0 16 16" style="width:17px;height:17px"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg></span>` : tile(item)}
+    <div class="nm" data-tip="${esc(tilde(path))}"><div class="t"><span class="tt${rtl ? " rtl" : ""}">${rtl ? "‎" : ""}${esc(title)}${rtl ? "‎" : ""}</span>${owner ? `<span class="tag keep long">Part of ${esc(owner.replace(/'s data$/, ""))}</span>` : tag ? `<span class="tag ${tag}">${tagText || (tag === "safe" ? "Safe" : "Check first")}</span>` : ""}</div>
+      ${why ? `<div class="why">${esc(why)}</div>` : sub ? `<div class="p">‎${esc(sub)}‎</div>` : ""}</div>
+    <div class="sz num">${fmt(size)}${sizeNote ? `<small>${esc(sizeNote)}</small>` : ""}</div>
+    ${max ? `<div class="bar"><i style="width:${Math.max(1, (size / max) * 100)}%;background:${color(item.cat)}"></i></div>` : ""}
+    <div class="hov">${canOpen ? `<button data-open="${esc(path)}">${ICON.open}Open</button>` : ""}<button data-reveal="${esc(path)}">${ICON.finder}Finder</button></div>
+  </div>`;
+}
+// Things that belong to an app: inside an .app / library package, or deep inside an app's data folder.
+// Rumi shows them but won't put them in the Trash (the Mac side refuses too).
+// iCloud Drive (deleting there spreads to your other devices), cloud drives, keychains, Mail and Messages: never trashed,
+// whole or in part (the Mac side refuses them too). Returns the name it's shown under.
+const PROTECTED = [["Library/Mobile Documents", "iCloud Drive"], ["Library/CloudStorage", "cloud storage"], ["Library/Keychains", "Keychains"], ["Library/Mail", "Mail"], ["Library/Messages", "Messages"]];
+function protectedPlace(p) {
+  if (!HOME || !p) return null;
+  for (const [rel, name] of PROTECTED) {
+    const b = HOME + "/" + rel;
+    if (p === b) return name;
+    if (p.startsWith(b + "/")) return rel === "Library/CloudStorage" ? p.slice(b.length + 1).split("/")[0].split("-")[0] || name : name;
+  }
+  return null;
+}
+function ownerOf(p) {
+  p = String(p || "");
+  const prot = protectedPlace(p); if (prot) return prot;
+  const pkg = /\/([^/]+)\.(app|framework|bundle|photoslibrary|photolibrary|fcpbundle|imovielibrary|musiclibrary|logicx|xcarchive)\/./i.exec(p);
+  if (pkg) return pkg[1];
+  const data = HOME && new RegExp("^" + HOME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "/Library/(?:Application Support|Containers|Group Containers)/([^/]+)/.").exec(p);
+  if (data && !(sugg || []).some(s => s.path === p)) return data[1] + "'s data";
+  return null;
+}
+// Worth a second look before trashing: anything in Library or a hidden folder that isn't on the Clean up list as safe.
+function needsCare(p) {
+  const s = (sugg || []).find(x => x.path === p);
+  if (s) return s.safety !== "safe";
+  return /\/Library\/|\/\.[^/]+\//.test(String(p).replace(HOME, ""));
+}
+const asItem = (path, cat, type) => ({ path, name: base(path), cat: cat || "other", type: type || "file" });
+function guessType(path, size) { const n = meta.get(path); return n?.type || (ext(path) && !/\.app$/.test(path) ? "file" : "dir"); }
+
+const SUGG_CAT = { Caches: "cache", Developer: "dev", Trash: "other", Downloads: "archive", "Large & old": "video", Apps: "app" };
+const GROUP_NOTE = { Caches: "Rebuilt automatically", Developer: "Comes back when needed", Downloads: "Installers & old files", "Large & old": "Untouched 6+ months", Apps: "Unused for months" };
+
+let paneSeq = 0, dupesPoll = 0;
+async function drawPane(rise) {
+  const seq = ++paneSeq, want = tab, live = () => seq === paneSeq && want === tab;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  movePill();
+  const pane = $("pane");
+  if (!status?.ready) { pane.innerHTML = `<div class="empty">${Rumi.svg("scan", { size: 84 })}Scanning…</div>`; return; }
+  if ((await drawPaneBody(pane, live)) === false) return;
+  if (rise && live() && !REDUCED.matches) [...pane.children].slice(0, 14).forEach((el, i) => { el.classList.add("rise"); el.style.animationDelay = i * 22 + "ms";
+    el.addEventListener("animationend", () => { el.classList.remove("rise"); el.style.animationDelay = ""; }, { once: true }); });
+}
+function movePill() {
+  const seg = $("tabs"), b = seg.querySelector("button.on"); if (!b) return;
+  let pill = seg.querySelector(".pill");
+  if (!pill) { pill = document.createElement("i"); pill.className = "pill"; pill.style.transition = "none"; seg.prepend(pill); seg.classList.add("pilled"); requestAnimationFrame(() => requestAnimationFrame(() => pill.style.transition = "")); }
+  pill.style.width = b.offsetWidth + "px"; pill.style.height = b.offsetHeight + "px";
+  pill.style.transform = `translate(${b.offsetLeft}px, ${b.offsetTop}px)`;
+}
+addEventListener("resize", () => movePill());
+// returns false when a newer draw took over while this one waited
+async function drawPaneBody(pane, live) {
+
+  if (tab === "cleanup") {
+    if (!sugg) { const s = (await api("/api/suggestions")).items; sugg ||= s; if (!live()) return false; }
+    setBadges();
+    if (!sugg.length) { pane.innerHTML = `<div class="empty">${Rumi.svg("happy", { size: 104 })}<span class="bignum">All tidy</span></div>`; return; }
+    const groups = {}; sugg.forEach(s => (groups[s.group] ||= []).push(s));
+    const safe = sugg.filter(s => s.safety === "safe" && s.action !== "empty"), safeTotal = safe.reduce((a, s) => a + s.size, 0);
+    const all = sugg.reduce((a, s) => a + s.size, 0);
+    let h = `<div class="intro"><span class="bignum num">${fmt(all)}</span>you can free up
+      <div class="btns"><button class="btn small" id="pick-safe" data-tip="Caches and build files that come back on their own">Select all safe · ${fmt(safeTotal)}</button></div></div>`;
+    const order = ["Trash", "Caches", "Developer", "Downloads", "Large & old", "Apps"];
+    for (const g of Object.keys(groups).sort((a, b) => order.indexOf(a) - order.indexOf(b))) {
+      const items = groups[g].sort((a, b) => b.size - a.size), gsum = items.reduce((a, s) => a + s.size, 0);
+      h += `<div class="grp"><span class="t">${esc(g)}</span><span class="s num">${fmt(gsum)}</span><span class="d">${esc(GROUP_NOTE[g] || "")}</span></div>`;
+      for (const s of items) {
+        if (s.action === "empty") {
+          h += row({ path: s.path, size: s.size, title: "Trash", tag: "review", tagText: "Can't undo", item: asItem(s.path, "other", "dir") });
+        } else {
+          const cat = s.group === "Large & old" ? (meta.get(s.path)?.cat || "video") : SUGG_CAT[s.group] || "other";
+          h += row({ path: s.path, size: s.size, title: s.title, why: s.why, tag: s.safety, item: asItem(s.path, cat, s.kind ? "dir" : guessType(s.path)) });
+        }
+      }
+    }
+    pane.innerHTML = h;
+    $("pick-safe").onclick = () => { safe.forEach(s => picked.set(s.path, s.size)); syncSelection(); };
+  }
+
+  if (tab === "dupes") {
+    if (!dupes || dupes.status !== "done") { dupes = await api("/api/dupes"); if (!live()) return false; }
+    if (dupes.status !== "done" && !dupes.groups?.length) {   // a rescan's re-check keeps showing the last result
+      const pct = dupes.total ? Math.round((dupes.progress / dupes.total) * 100) : 0;
+      const bar = pane.querySelector(".pbar i");
+      if (bar) { bar.style.width = pct + "%"; pane.querySelector(".bignum").textContent = pct + "%"; }
+      else pane.innerHTML = `<div class="empty">${Rumi.svg("scan", { size: 96 })}<span class="bignum num">${pct}%</span>Finding copies…<div class="pbar"><i style="width:${pct}%"></i></div></div>`;
+      clearTimeout(dupesPoll); dupesPoll = setTimeout(() => tab === "dupes" && drawPane(), 1500); return true;
+    }
+    setBadges();
+    const ex = dupes.groups.filter(g => g.kind === "exact" && !(g.clones && !g.waste)), sim = dupes.groups.filter(g => g.kind === "similar");
+    const waste = ex.reduce((a, g) => a + g.waste, 0);
+    if (!dupes.groups.length) { pane.innerHTML = `<div class="empty">${Rumi.svg("happy", { size: 104 })}<span class="bignum">No copies</span></div>`; return; }
+    // "select all" only takes copies outside code projects, where copies are usually on purpose
+    const easy = ex.filter(g => !g.project), easyN = easy.reduce((a, g) => a + g.files.length - 1, 0);
+    let h = `<div class="intro"><span class="bignum num">${fmt(waste)}</span>in extra copies <span class="info" data-tip="Copies that share disk space aren't counted: removing them frees almost nothing">${ICON.info}</span>
+      <div class="btns">${easyN ? `<button class="btn small" id="pick-dupes" data-tip="Keeps the oldest of each set">Select ${easyN} extra cop${easyN === 1 ? "y" : "ies"}${easy.length < ex.length ? " outside projects" : ""}</button>` : ""}</div></div>`;
+    const card = (g, keepLabel) => {
+      const f0 = g.files[0], it = { ...asItem(f0.path, g.cat), size: f0.size };
+      let b = `<div class="card"><div class="chd">${tile(it)}<div style="min-width:0"><div class="t">${esc(base(f0.path))}</div>
+        <div class="m num">${g.files.length} copies · ${fmt(g.size)} each${g.project ? ` · <span class="tag review">In a project</span>` : ""}${g.clones ? ` · <span class="tag keep" data-tip="Some of these copies share disk space, so removing them frees less">Shared space</span>` : ""}</div></div><div class="save num">${fmt(g.waste)}<small>${g.kind === "exact" ? "to free" : "if not needed"}</small></div></div>`;
+      const apart = tellApart(g.files.map(f => f.path));   // same name in different folders: the folder that differs follows, faint
+      g.files.forEach((f, i) => {
+        keepMeta(f.path, asItem(f.path, g.cat));
+        // the copy Rumi keeps can't be ticked, so a set can never lose every copy
+        b += i === 0 ? `<div class="row keeprow" data-size="${f.size}"><span class="lock" title="Rumi keeps this copy">${ICON.check}</span>`
+          : `<div class="row" data-row="${esc(f.path)}" data-size="${f.size}"><input type="checkbox" aria-label="Remove this copy" data-path="${esc(f.path)}" data-size="${f.size}" ${picked.has(f.path) ? "checked" : ""}>`;
+        b += `
+          <div class="nm" data-tip="${esc(tilde(f.path))}"><div class="t"><span class="tt">${esc(base(f.path))}</span>${apart[i] ? `<span class="in">${esc(apart[i] === base(HOME) ? "Home" : apart[i])}</span>` : ""}${i === 0 ? `<span class="tag keep">${keepLabel}</span>` : ""}</div></div>
+          <div class="sz num" style="font-weight:450;color:var(--faint);font-size:12px">${ago(f.mtime)}</div>
+          <div class="hov"><button data-reveal="${esc(f.path)}">${ICON.finder}Finder</button></div></div>`;
+      });
+      return b + `</div>`;
+    };
+    if (ex.length) { h += `<div class="grp"><span class="t">Identical</span><span class="s num">${fmt(waste)}</span></div>`; ex.slice(0, 150).forEach(g => h += card(g, "Keep")); }
+    if (sim.length) { h += `<div class="grp"><span class="t">Possible versions</span><span class="d">Check first</span></div>`; sim.slice(0, 100).forEach(g => h += card(g, "Newest")); }
+    pane.innerHTML = h;
+    const pd = $("pick-dupes"); if (pd) pd.onclick = () => { easy.forEach(g => g.files.slice(1).forEach(f => { picked.set(f.path, f.size); keepMeta(f.path, asItem(f.path, g.cat)); })); syncSelection(); };
+  }
+
+  if (tab === "biggest") {
+    const list = overview.biggest, max = list[0]?.size || 1;
+    pane.innerHTML = `<div class="intro"><span class="bignum num">${fmt(list.reduce((a, f) => a + f.size, 0))}</span>in your ${list.length} largest files</div>` +
+      list.map(f => row({ path: f.path, size: f.size, title: base(f.path), max, sizeNote: ago(f.mtime), item: { ...asItem(f.path, f.cat), size: f.size } })).join("");
+  }
+
+  if (tab === "folder") {
+    const data = await getTree(current), node = data.node; if (!live()) return false;
+    const kids = (node.children || []).filter(k => k.size > 0), max = kids[0]?.size || 1;
+    pane.innerHTML = `<div class="intro"><span class="bignum num">${fmt(node.size)}</span>in <b style="color:var(--ink)">${esc(rootName(data.crumbs.at(-1).name))}</b></div>` +
+      kids.map(k => k.type === "rest"
+        ? `<div class="row nochk"><span class="tile" style="--c:var(--c-other)">…</span><div class="nm"><div class="t" style="color:var(--dim)">${esc(k.name)}</div></div><div class="sz num" style="color:var(--dim)">${fmt(k.size)}</div></div>`
+        : row({ path: k.path, size: k.size, title: label(k), max, item: k, open: k.type === "dir" && k.hasKids && !isApp(k),
+            sub: k.type === "dir" && !isApp(k) ? `${(k.count || 0).toLocaleString()} files` : "", sizeNote: ago(k.mtime) })).join("");
+  }
+  syncSelection();
+  return true;
+}
+
+$("pane").addEventListener("click", e => {
+  const r = e.target.closest("[data-reveal]"), o = e.target.closest("[data-open]");
+  if (r) { e.stopPropagation(); return reveal(r.dataset.reveal); }
+  if (o) { e.stopPropagation(); return open(o.dataset.open); }
+  if (e.target.closest(".btn")) return;
+  const rw = e.target.closest(".row[data-row]");
+  if (rw) { const p = rw.dataset.row; toggle(p, +rw.dataset.size, e.target.tagName === "INPUT" ? e.target.checked : !picked.has(p)); popOnce(rw.querySelector("input")); }
+});
+$("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const changed = tab !== b.dataset.tab; if (changed) $("pane").scrollTop = 0; tab = b.dataset.tab; drawPane(changed); });
+
+/* ---------- actions ---------- */
+const reveal = p => api("/api/reveal", { path: p }).catch(() => {});
+
+/* ---------- details card for a file ---------- */
+let inspEl = null;
+function closeInsp() { $("insp").hidden = true; if (inspEl) inspEl.classList.remove("inspected"); inspEl = null; }
+function inspect(k, el) {
+  const p = $("insp");
+  if (inspEl === el && !p.hidden) return closeInsp();
+  closeInsp(); inspEl = el; el.classList.add("inspected");
+  const draw = () => {
+    const on = picked.has(k.path);
+    p.innerHTML = `<div class="ih">${tile(k)}<div style="min-width:0"><div class="n">${esc(label(k))}</div><div class="s num">${fmt(k.size)}</div></div>
+        <button class="x" aria-label="Close"><svg class="i" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+      <div class="m">${k.type === "dir" && !isApp(k) ? `${(k.count || 0).toLocaleString()} files · ` : ""}${isApp(k) ? "App" : CAT[k.cat] || "Other"}${k.mtime ? ` · modified ${ago(k.mtime)}` : ""}</div>
+      <div class="p">${esc(tilde(k.path))}</div>${ownerOf(k.path) ? `<div class="warnline">Part of ${esc(ownerOf(k.path))}</div>` : ""}
+      <div class="a"><button class="btn" data-a="reveal">${ICON.finder}Show in Finder</button>
+        ${ownerOf(k.path) ? "" : `<button class="btn ${on ? "" : "primary"}" data-a="pick">${on ? ICON.check + "Added" : ICON.plus + "Add to Clean up"}</button>`}</div>`;
+    p.querySelector(".x").onclick = closeInsp;
+    p.querySelector('[data-a="reveal"]').onclick = () => reveal(k.path);
+    const pk = p.querySelector('[data-a="pick"]'); if (pk) pk.onclick = () => { toggle(k.path, k.size, undefined, k); draw(); };
+  };
+  draw(); p.hidden = false;
+  const r = el.getBoundingClientRect(), pw = p.offsetWidth, ph = p.offsetHeight, m = 12;
+  let x = r.right + m; if (x + pw > innerWidth - m) x = r.left - pw - m; if (x < m) x = Math.min(Math.max(m, r.left), innerWidth - pw - m);
+  let y = Math.min(Math.max(m, r.top), innerHeight - ph - m);
+  p.style.left = x + "px"; p.style.top = y + "px";
+}
+/* ---------- viewer: photos and videos open right here, full size ----------
+   The picture grows out of its cartridge; ← → step through the others in the same folder; Esc puts it back. */
+const VIEW_IMG = new Set("jpg jpeg png gif webp bmp svg heic heif tif tiff psd dng cr2 cr3 nef arw".split(" "));
+const VIEW_VID = new Set("mp4 m4v mov webm mkv avi".split(" "));
+// web pages show live (Page) or as source (Code); code and text files show as code
+const VIEW_PAGE = new Set(["html", "htm"]);
+const VIEW_TEXT = new Set("txt text md markdown css scss sass less js mjs cjs ts tsx jsx json jsonc py swift sh zsh bash fish rb go rs c h cc cpp hpp m mm java kt kts php sql toml yaml yml xml plist csv tsv log ini cfg conf vue svelte lua r dart graphql gql tex".split(" "));
+const isDoc = k => VIEW_PAGE.has(ext(k.name || k.path)) || VIEW_TEXT.has(ext(k.name || k.path));
+const viewable = k => !!k?.path && k.type !== "dir" && !isApp(k) && (VIEW_IMG.has(ext(k.name || k.path)) || VIEW_VID.has(ext(k.name || k.path)) || isDoc(k));
+const LANG = { html: "Web page", htm: "Web page", md: "Markdown", markdown: "Markdown", txt: "Text", text: "Text", js: "JavaScript", mjs: "JavaScript", cjs: "JavaScript", jsx: "JavaScript",
+  ts: "TypeScript", tsx: "TypeScript", py: "Python", swift: "Swift", css: "CSS", scss: "SCSS", json: "JSON", sh: "Shell", zsh: "Shell", bash: "Shell", rb: "Ruby", go: "Go", rs: "Rust",
+  c: "C", h: "C header", cpp: "C++", java: "Java", kt: "Kotlin", php: "PHP", sql: "SQL", yaml: "YAML", yml: "YAML", toml: "TOML", xml: "XML", plist: "Property list", csv: "CSV", log: "Log" };
+const langOf = p => LANG[ext(p)] || ext(p).toUpperCase();
+const viewURL = p => `/api/view?t=${encodeURIComponent(TOKEN)}&path=${encodeURIComponent(p)}`;
+const dirOf = p => p.slice(0, p.lastIndexOf("/"));
+const V = { open: false, list: [], i: 0, dir: 1, aspect: 1.5, natural: null, mode: "page", lines: 0 };
+const vCart = p => document.querySelector(`#map .layer:not(.leaving) .b[data-path="${CSS.escape(p)}"]`);
+// where a cartridge's picture sits on screen (the whole cartridge if it shows no picture)
+function vSpot(el) {
+  if (!el) return null;
+  const r = (el.querySelector("img.ok") || el).getBoundingClientRect(), s = $("v-stage").getBoundingClientRect();
+  return r.width > 2 && r.height > 2 ? { x: r.left - s.left, y: r.top - s.top, w: r.width, h: r.height } : null;
+}
+function vRect() {
+  const k = V.list[V.i];
+  if (k && isDoc(k)) { const s = $("v-stage"), mx = 68, my = 14; return { x: mx, y: my, w: s.clientWidth - mx * 2, h: s.clientHeight - my - 22 }; }   // pages and code fill the window, leaving room for ← →
+  const s = $("v-stage"), m = 24, W = s.clientWidth - m * 2, H = s.clientHeight - m * 2;
+  let w = Math.min(W, H * V.aspect), h = w / V.aspect;
+  if (V.natural && V.natural[0] < w) { w = V.natural[0]; h = w / V.aspect; }   // small pictures stay at their own size
+  return { x: Math.round((W - w) / 2 + m), y: Math.round((H - h) / 2 + m), w: Math.round(w), h: Math.round(h) };
+}
+function vPlace() { if (!V.open) return; const f = $("v-frame"), r = vRect(); Object.assign(f.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" }); }
+
+function openViewer(k, el) {
+  $("tip").hidden = true; V.lines = 0;
+  const seen = new Set(), d = dirOf(k.path);
+  V.list = [...document.querySelectorAll("#map .layer:not(.leaving) .b[data-path]")].map(b => meta.get(b.dataset.path))
+    .filter(x => viewable(x) && dirOf(x.path) === d && !seen.has(x.path) && seen.add(x.path)).sort((a, b) => b.size - a.size);
+  if (!V.list.some(x => x.path === k.path)) V.list.unshift(k);
+  V.i = V.list.findIndex(x => x.path === k.path); V.dir = 1;
+  const im = el?.querySelector("img.ok");
+  V.aspect = im && im.naturalWidth ? im.naturalWidth / im.naturalHeight : 1.5;
+  V.open = true; show("viewer");
+  if (NATIVE) api("/native/viewer", { open: true }).catch(() => {});   // a quiet rescan waits while you look
+  const from = vSpot(el), fly = !REDUCED.matches && from;
+  vDraw(fly);   // a video starts once the frame has landed, so making the player doesn't stall the motion
+  if (!fly) return;
+  const f = $("v-frame");
+  el.classList.add("vsrc"); f.classList.add("flying");
+  $("viewer").animate([{ background: "transparent" }, { background: css("--bg") || "#f2f0eb" }], { duration: 200, easing: "ease-out" });
+  $("viewer").querySelector(".vtop").animate([{ opacity: 0 }, { opacity: 0, offset: .55 }, { opacity: 1 }], { duration: 280, easing: "ease-out" });   // after the page behind has faded
+  const a = vFly(from, vRect(), true);
+  a.onfinish = a.oncancel = () => { el.classList.remove("vsrc"); f.classList.remove("flying"); f.querySelector(".vin").getAnimations().forEach(x => x.cancel()); if (V.open && !f.querySelector(".vm")) vMedia(); };
+}
+// The frame sits at its final place; transforms carry it from the cartridge (compositor-only, so a busy page can't stall it).
+// The frame scales unevenly to the cartridge's shape while the picture inside keeps its proportions and stays cropped to fill.
+const flyBack = bezier(.3, 0, .2, 1);
+function vFly(from, to, opening) {
+  const f = $("v-frame"), vin = f.querySelector(".vin"), N = 20, W = to.w, H = to.h, outer = [], inner = [];
+  for (let i = 0; i <= N; i++) {
+    const p = opening ? navEase(i / N) : 1 - flyBack(i / N), L = (a, b) => a + (b - a) * p;
+    const x = L(from.x, to.x), y = L(from.y, to.y), w = L(from.w, W), h = L(from.h, H), sx = w / W, sy = h / H, u = Math.max(sx, sy);
+    outer.push({ transform: `translate(${x - to.x}px,${y - to.y}px) scale(${sx},${sy})` });
+    inner.push({ transform: `translate(${(w - W * u) / 2 / sx}px,${(h - H * u) / 2 / sy}px) scale(${u / sx},${u / sy})` });
+  }
+  const o = { duration: opening ? 280 : 220, fill: opening ? "none" : "forwards" };
+  vin.animate(inner, o);
+  return f.animate(outer, o);
+}
+
+const stopVideo = f => f.querySelectorAll("video").forEach(v => { v.pause(); v.removeAttribute("src"); v.load(); });
+function vDraw(later) {
+  const k = V.list[V.i], f = $("v-frame"), vid = VIEW_VID.has(ext(k.path)), doc = isDoc(k), th = !doc && canThumb(k) ? thumbURL(k.path) : "";
+  V.natural = null; f.getAnimations({ subtree: true }).forEach(a => a.finish()); stopVideo(f);
+  f.dataset.path = k.path; f.classList.toggle("isvid", vid); f.classList.toggle("isdoc", doc);
+  f.innerHTML = `<div class="vin">${th ? `<img class="vth" src="${th}" alt="">` : ""}${doc ? `<div class="vpaper"></div>` : ""}</div>`;
+  const t = f.querySelector(".vth");
+  if (t) t.onload = () => { if (!V.natural && V.list[V.i] === k) vFit(t.naturalWidth, t.naturalHeight); };
+  vPlace(); vBar();
+  if (!(later && (vid || doc))) vMedia();
+}
+const vFit = (w, h, real) => { if (!w || !h) return; V.aspect = w / h; if (real) V.natural = [w, h]; vPlace(); };
+// photos come at the size this window shows them (device pixels, rounded up so the same size repeats and caches)
+const vBox = () => { const s = $("v-stage"), d = devicePixelRatio || 1, up = n => Math.max(256, Math.ceil(n * d / 256) * 256); return `&bw=${up(s.clientWidth - 48)}&bh=${up(s.clientHeight - 48)}`; };
+const vImgURL = p => viewURL(p) + vBox();
+function vMedia() {
+  const k = V.list[V.i], f = $("v-frame"), vin = f.querySelector(".vin"), vid = VIEW_VID.has(ext(k.path)), t = f.querySelector(".vth");
+  if (isDoc(k)) return vDoc(k, f, vin);
+  vin.insertAdjacentHTML("beforeend", vid
+    ? `<video class="vm" src="${viewURL(k.path)}" controls autoplay playsinline preload="auto"></video>`
+    : `<img class="vm" src="${vImgURL(k.path)}" decoding="async" alt="">`);
+  const m = vin.querySelector(".vm");
+  if (vid) {
+    m.addEventListener("loadedmetadata", () => { if (V.list[V.i] === k) vFit(m.videoWidth, m.videoHeight, true); });
+    m.addEventListener("loadeddata", () => m.classList.add("ok"));
+  } else m.onload = () => {
+    if (V.list[V.i] !== k) return;
+    vFit(m.naturalWidth, m.naturalHeight, true); m.classList.add("ok"); if (t) t.remove();
+    // only now get the next one ready (the way you're stepping), so it never queues ahead of this one
+    const n = V.list[V.i + V.dir]; if (n && !VIEW_VID.has(ext(n.path))) new Image().src = vImgURL(n.path);
+  };
+  m.onerror = () => {
+    if (V.list[V.i] !== k) return;
+    m.remove();
+    f.insertAdjacentHTML("beforeend", `<div class="vfail"><span>Can't ${vid ? "play" : "show"} this here</span><button class="btn small">Open</button></div>`);
+    f.querySelector(".vfail button").onclick = () => NATIVE ? api("/native/open", { path: k.path }) : reveal(k.path);
+  };
+}
+// A web page runs in a sealed frame from its own folder (its pictures, styles and scripts load; it can't see Rumi).
+// Code comes as text, coloured, with line numbers.
+function vDoc(k, f, vin) {
+  vin.querySelectorAll(".vm").forEach(x => x.remove()); f.querySelector(".vfail")?.remove();
+  const page = VIEW_PAGE.has(ext(k.path)) && V.mode === "page" && NATIVE;
+  if (page) {
+    vin.insertAdjacentHTML("beforeend", `<iframe class="vm vpage" sandbox="allow-scripts allow-forms" src="rumi://files${k.path.split("/").map(encodeURIComponent).join("/")}"></iframe>`);
+    const fr = vin.querySelector(".vpage"); fr.onload = () => fr.classList.add("ok");
+    return;
+  }
+  vin.insertAdjacentHTML("beforeend", `<div class="vm vcode"></div>`);
+  const box = vin.querySelector(".vcode");
+  api(`/api/text?path=${encodeURIComponent(k.path)}`).then(r => {
+    if (V.list[V.i] !== k || !box.isConnected) return;
+    const lines = r.text.split("\n").length; V.lines = lines; vBar();
+    box.innerHTML = `<pre class="gut">${Array.from({ length: lines }, (_, i) => i + 1).join("\n")}</pre><pre class="src">${hl(r.text, ext(k.path))}</pre>`
+      + (r.truncated ? `<div class="vmore">Showing the first ${lines.toLocaleString()} lines · <button class="btn small">Open the whole file</button></div>` : "");
+    box.querySelector(".vmore button")?.addEventListener("click", () => api("/native/open", { path: k.path }));
+    box.classList.add("ok");
+  }).catch(e => {
+    if (V.list[V.i] !== k) return;
+    box.remove();
+    const why = /binary/.test(e.message) ? "This isn't text" : /iCloud/.test(e.message) ? "This is in iCloud, not on this Mac" : "Can't show this here";
+    f.insertAdjacentHTML("beforeend", `<div class="vfail"><span>${why}</span><button class="btn small">Open</button></div>`);
+    f.querySelector(".vfail button").onclick = () => NATIVE ? api("/native/open", { path: k.path }) : reveal(k.path);
+  });
+}
+// Light syntax colouring: comments, strings, numbers, keywords, and tags in markup. One pass, no library.
+const HL_KW = new Set(("const let var function return if else for while do switch case break continue new class extends import export from default async await try catch finally throw typeof instanceof in of this super null undefined true false void yield static public private protected "
+  + "func struct enum guard self Self init deinit extension protocol where defer inout some any as is nil let def lambda pass None True False elif not and or with fn pub mut impl use mod match package interface type val fun when object end begin then local nil require module").split(" "));
+function hl(src, x) {
+  const e = t => t.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const markup = /^(html|htm|xml|plist|svg|vue|svelte)$/.test(x), hash = /^(py|sh|zsh|bash|fish|rb|yaml|yml|toml|ini|cfg|conf|r)$/.test(x);
+  if (/^(txt|text|log|csv|tsv)$/.test(x)) return e(src);
+  if (/^(md|markdown)$/.test(x)) return e(src).replace(/^(#{1,6} .*)$/gm, '<span class="h-k">$1</span>').replace(/(`[^`\n]+`)/g, '<span class="h-s">$1</span>');
+  const re = markup
+    ? /(<!--[\s\S]*?-->)|(<\/?[A-Za-z][\w:-]*)|([\w:-]+)(?==)|("[^"]*"|'[^']*')/g
+    : hash
+      ? /(#.*$)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|(\b\d[\d_.]*\b)|(\b[A-Za-z_]\w*\b)/gm
+      : /(\/\/.*$|\/\*[\s\S]*?\*\/)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\b\d[\d_.xa-fA-F]*\b)|(\b[A-Za-z_$][\w$]*\b)/gm;
+  let out = "", last = 0;
+  for (const m of src.matchAll(re)) {
+    out += e(src.slice(last, m.index)); last = m.index + m[0].length;
+    const t = e(m[0]);
+    if (markup) out += m[1] ? `<span class="h-c">${t}</span>` : m[2] ? `<span class="h-t">${t}</span>` : m[3] ? `<span class="h-a">${t}</span>` : `<span class="h-s">${t}</span>`;
+    else out += m[1] ? `<span class="h-c">${t}</span>` : m[2] ? `<span class="h-s">${t}</span>` : m[3] ? `<span class="h-n">${t}</span>` : HL_KW.has(m[0]) ? `<span class="h-k">${t}</span>` : t;
+  }
+  return out + e(src.slice(last));
+}
+function vBar() {
+  const k = V.list[V.i], owner = ownerOf(k.path), on = picked.has(k.path), doc = isDoc(k), page = VIEW_PAGE.has(ext(k.path));
+  $("v-name").textContent = label(k);
+  $("v-name").dataset.tip = tilde(k.path) + (k.mtime ? ` · modified ${ago(k.mtime)}` : "");
+  $("v-meta").textContent = fmt(k.size) + (doc ? ` · ${langOf(k.path)}` : "") + (doc && V.lines && (!page || V.mode === "code") ? ` · ${V.lines.toLocaleString()} lines` : "") + (V.list.length > 1 ? ` · ${V.i + 1} of ${V.list.length}` : "");
+  const md = $("v-mode"); md.hidden = !(page && NATIVE);
+  md.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.m === V.mode));
+  const pk = $("v-pick"); pk.hidden = !!owner; pk.className = "btn small" + (on ? "" : " primary");
+  pk.innerHTML = on ? ICON.check + "Added" : ICON.plus + "Add to Clean up";
+  $("v-trash").hidden = !!owner;
+  $("v-prev").disabled = V.i === 0; $("v-next").disabled = V.i >= V.list.length - 1;
+}
+function vStep(d) {
+  const i = Math.max(0, Math.min(V.list.length - 1, V.i + d)); if (i === V.i) return;
+  V.dir = d > 0 ? 1 : -1; V.i = i; V.lines = 0; vDraw();
+}
+function closeViewer(now) {
+  if (!V.open) return;
+  V.open = false; $("hint").hidden = true;
+  if (NATIVE) api("/native/viewer", { open: false }).catch(() => {});
+  const f = $("v-frame"), vw = $("viewer"), k = V.list[V.i];
+  f.querySelector("video")?.pause();
+  const done = () => { vw.getAnimations({ subtree: true }).forEach(x => x.cancel()); vw.hidden = true; stopVideo(f); f.innerHTML = ""; f.removeAttribute("style"); f.classList.remove("flying"); };
+  const el = !now && !REDUCED.matches && vCart(k.path), to = el && vSpot(el);
+  if (!to) {
+    if (now || REDUCED.matches) return done();
+    vw.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, easing: "ease-in" }).onfinish = done; return;
+  }
+  el.classList.add("vsrc"); f.classList.add("flying");
+  vw.animate([{ background: css("--bg") || "#f2f0eb" }, { background: "transparent" }], { duration: 200, easing: "ease-in", fill: "forwards" });
+  vw.querySelector(".vtop").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" });
+  vFly(to, vRect(), false).onfinish = () => { el.classList.remove("vsrc"); done(); };
+}
+// something in the viewer went to the Trash: show the next one, or close when none are left
+function vGone(gone) {
+  if (!V.open) return;
+  const cur = V.list[V.i], dead = p => gone.has(p) || [...gone].some(g => p.startsWith(g + "/"));
+  V.list = V.list.filter(x => !dead(x.path));
+  if (!V.list.length) return closeViewer(true);
+  if (dead(cur.path)) { V.i = Math.min(V.i, V.list.length - 1); vDraw(); } else { V.i = V.list.indexOf(cur); vBar(); }
+}
+$("v-finder").innerHTML = ICON.folder.replace("width:17px;height:17px", "width:16px;height:16px"); $("v-x").innerHTML = ICON.x.replace("width:12px;height:12px", "width:15px;height:15px");
+$("v-trash").innerHTML = `<svg class="i" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 8.6c.1.5.5.9 1 .9h4.6c.5 0 .9-.4 1-.9l.7-8.6"/></svg>`;
+$("v-prev").innerHTML = ICON.back; $("v-next").innerHTML = ICON.open;
+$("v-x").onclick = () => closeViewer();
+$("v-mode").addEventListener("click", e => { const b = e.target.closest("button[data-m]"); if (!b || b.dataset.m === V.mode) return; V.mode = b.dataset.m; V.lines = 0; vBar(); vMedia(); });
+$("v-app").innerHTML = ICON.finder; $("v-app").onclick = () => NATIVE ? api("/native/open", { path: V.list[V.i].path }) : reveal(V.list[V.i].path);
+// Esc pressed inside a web page in the viewer (its frame passes just that key on)
+addEventListener("message", e => { if (e.data?.rumiKey === "Escape" && V.open && e.source === $("v-frame").querySelector("iframe")?.contentWindow) closeViewer(); });
+$("v-prev").onclick = () => vStep(-1); $("v-next").onclick = () => vStep(1);
+$("v-finder").onclick = () => reveal(V.list[V.i].path);
+$("v-trash").onclick = () => trashOne(V.list[V.i].path);
+$("v-pick").onclick = () => { const k = V.list[V.i]; toggle(k.path, k.size, undefined, k); vBar(); };
+$("v-stage").addEventListener("click", e => { if (e.target === e.currentTarget) closeViewer(); });
+$("v-frame").addEventListener("contextmenu", e => { e.preventDefault(); if (V.open) contextMenu(V.list[V.i].path); });
+addEventListener("resize", vPlace);
+/* ---------- search: ⌘F opens a Spotlight-style panel ----------
+   Empty: what you opened lately, then your biggest files. Typing: Rumi's map answers at once (folders, big files,
+   ~/Library too), Spotlight fills in every other file a moment later. ↵ opens, ⌘↵ shows it on the map. */
+const F = { q: "", seq: 0, idx: [], spot: [], spotDone: false, items: [], sel: 0, empty: null, t: 0 };
+const ICON_SEARCH = `<svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>`;
+const isFolder = k => k.type === "dir" && !k.pkg && !isApp(k);
+const recent = {
+  get() { try { return JSON.parse(localStorage.getItem("rumi-recent") || "[]"); } catch { return []; } },
+  add(k) { try { const r = recent.get().filter(x => x.path !== k.path); r.unshift({ path: k.path, name: k.name, size: k.size, type: k.type, cat: k.cat, pkg: !!k.pkg });
+    localStorage.setItem("rumi-recent", JSON.stringify(r.slice(0, 5))); } catch {} },
+};
+function openFind() {
+  if (!status?.ready && !status?.refreshing) return;
+  closeInsp(); $("tip").hidden = true; closeKinds();
+  show("find"); const i = $("f-q"); i.focus(); i.select(); findRun();
+}
+const closeFind = () => { if (!$("find").hidden) hide("find"); };
+async function findRun() {
+  const q = $("f-q").value.trim(), seq = ++F.seq; F.q = q; F.sel = 0;
+  if (!q) {
+    F.idx = F.spot = []; F.empty = { recent: recent.get(), big: F.empty?.big || [] }; findDraw();
+    const r = await api(`/api/search?q=`).catch(() => null); if (seq === F.seq && r) { F.empty.big = r.results; findDraw(); }
+    return;
+  }
+  F.empty = null; F.spotDone = !NATIVE;
+  const get = src => api(`/api/search?src=${src}&q=${encodeURIComponent(q)}`).catch(() => null);
+  get("index").then(r => { if (seq === F.seq && r && !r.stale) { F.idx = r.results; F.idxQ = q; findDraw(); } });
+  if (NATIVE) get("spotlight").then(r => { if (seq === F.seq && r && !r.stale) { F.spot = r.results; F.spotQ = q; F.spotDone = true; findDraw(); } });
+}
+const fRow = (k, i, q) => {
+  const name = label(k), m = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").exec(name) : null;
+  const hl = m ? esc(name.slice(0, m.index)) + "<mark>" + esc(m[0]) + "</mark>" + esc(name.slice(m.index + m[0].length)) : esc(name);
+  return `<div class="fr ${i === F.sel ? "sel" : ""}" data-i="${i}" data-tip="${esc(tilde(k.path))}">${tile(k)}<div class="fm"><b>${hl}</b><small>${esc(whereOf(k.path))}</small></div><span class="num">${k.size ? fmt(k.size) : ""}</span></div>`;
+};
+function findDraw() {
+  const L = $("f-list"); let html = "", i = 0; F.items = [];
+  const sect = (title, list) => { if (!list.length) return; html += `<div class="fh">${title}</div>`; for (const k of list) { html += fRow(k, i++, F.q); F.items.push(k); } };
+  F.drawnQ = F.empty ? "" : F.q;
+  if (F.empty) {
+    sect("Recent", F.empty.recent); sect("Biggest files", F.empty.big);
+    $("f-n").textContent = "";
+  } else {
+    const seen = new Map();
+    for (const k of [...(F.idxQ === F.q ? F.idx : []), ...(F.spotQ === F.q ? F.spot : [])]) if (!seen.has(k.path)) seen.set(k.path, k);
+    const all = [...seen.values()].sort((a, b) => a.score - b.score || b.size - a.size);
+    const dirs = all.filter(isFolder), files = all.filter(k => !isFolder(k));
+    sect("Folders", dirs.slice(0, 4)); sect("Files", files.slice(0, 40));
+    $("f-n").textContent = all.length ? `${all.length >= 200 ? "200+" : all.length} found` : F.spotDone ? "" : "…";
+    if (!all.length && F.spotDone) html = `<div class="fnone">Nothing named “${esc(F.q)}”</div>`;
+  }
+  L.innerHTML = html;
+}
+function findMove(d) {
+  if (!F.items.length) return;
+  F.sel = (F.sel + d + F.items.length) % F.items.length;
+  $("f-list").querySelectorAll(".fr").forEach(r => r.classList.toggle("sel", +r.dataset.i === F.sel));
+  $("f-list").querySelector(".fr.sel")?.scrollIntoView({ block: "nearest" });
+}
+// ↵: a folder opens on the map, a photo or video opens in the viewer, anything else is shown on the map with its card.
+// ⌘↵: always just show it on the map.
+async function findGo(k, onMap) {
+  closeFind(); recent.add(k);
+  if (focusCat || changedOn) { focusCat = null; focusKinds = new Set(); changedOn = false; drawHeader(); if (current === dirOf(k.path) || isFolder(k)) await open(current, null, "filter"); }
+  if (isFolder(k) && !onMap) return open(k.path);
+  const parent = dirOf(k.path);
+  if (!(await getTree(parent).catch(() => null))) { reveal(k.path); return; }   // not on the map (inside an app or a private folder)
+  if (current !== parent) { await open(parent); await wait(REDUCED.matches ? 0 : 330); }
+  const el = document.querySelector(`#map .layer:not(.leaving) .b[data-path="${CSS.escape(k.path)}"]`);
+  const item = meta.get(k.path) || k;
+  if (!onMap && viewable(item)) return openViewer(item, el);
+  if (!el) return toast(`<span>${esc(label(k))} is too small to have its own cartridge here</span><button class="btn small" id="toast-show">Show in Finder</button>`, 6000), ($("toast-show").onclick = () => reveal(k.path));
+  el.classList.remove("found"); void el.offsetWidth; el.classList.add("found");
+  if (!onMap && !isFolder(k)) inspect(item, el);
+}
+// ↵ acts on the results for what's typed now; if they're still on their way, it waits for them (up to 3 s)
+async function findEnter(onMap) {
+  const q = $("f-q").value.trim(), gone = () => $("find").hidden || $("find").classList.contains("closing");
+  if (q !== F.q) { clearTimeout(F.t); findRun(); }
+  for (let i = 0; i < 60 && F.drawnQ !== q && !gone(); i++) await wait(50);
+  if (F.drawnQ !== q || gone() || $("f-q").value.trim() !== q) return;
+  const k = F.items[F.sel]; if (k) findGo(k, onMap);
+}
+$("f-q").addEventListener("input", () => { clearTimeout(F.t); F.t = setTimeout(findRun, 70); });
+$("f-q").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") { e.preventDefault(); findMove(1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); findMove(-1); }
+  else if (e.key === "Enter") { e.preventDefault(); findEnter(e.metaKey); }
+  else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
+});
+$("f-list").addEventListener("mousemove", e => { const r = e.target.closest(".fr"); if (r && +r.dataset.i !== F.sel) { F.sel = +r.dataset.i; findMove(0); } });
+$("f-list").addEventListener("click", e => { const r = e.target.closest(".fr"); if (r) findGo(F.items[+r.dataset.i], e.metaKey); });
+$("find").addEventListener("mousedown", e => { if (e.target === e.currentTarget) closeFind(); });
+$("find-btn").innerHTML = ICON_SEARCH + "Search"; $("find-btn").onclick = openFind;
+
+/* ---------- filters: a header colour opens the kinds inside it ----------
+   "Documents" → Web pages, PDF, Slides… Ticking kinds fades every cartridge that holds none of them. */
+let KINDS = [], KIND_EXT = {}, focusKinds = new Set();
+async function loadKinds() {
+  const r = await api("/api/kinds").catch(() => null); if (!r) return;
+  KINDS = r.kinds; KIND_EXT = {}; for (const k of KINDS) for (const e of k.exts) KIND_EXT[e] = k.id;
+}
+function openKinds(btn, cat) {
+  const ks = KINDS.filter(k => k.cat === cat && k.count > 0).sort((a, b) => b.bytes - a.bytes);
+  if (!ks.length) return false;
+  // a row is just the name and its size; which file types it covers and how many files show on hover
+  const p = $("kpop"), draw = () => {
+    const allOn = focusCat === cat && !focusKinds.size;
+    p.innerHTML = `<button class="kr all ${allOn ? "on" : ""}" data-all><span class="cb">${ICON.check}</span><span class="kn">All ${esc(CAT[cat].toLowerCase())}</span><span class="ks num">${fmt(overview?.cats?.[cat] || 0)}</span></button>
+      <div class="ksep"></div>
+      ${ks.map(k => `<button class="kr ${focusCat === cat && focusKinds.has(k.id) ? "on" : ""}" data-k="${k.id}" data-tip-side="right" data-tip="${esc(k.exts.map(e => "." + e).join("  "))} · ${k.count.toLocaleString()} file${k.count === 1 ? "" : "s"}"><span class="cb">${ICON.check}</span><span class="kn">${esc(k.label)}</span><span class="ks num">${fmt(k.bytes)}</span></button>`).join("")}
+`;
+  };
+  draw(); p.hidden = false; p._cat = cat; p._draw = draw;
+  markOpenChip();
+  const r = btn.getBoundingClientRect(); p.style.left = Math.min(r.left, innerWidth - p.offsetWidth - 12) + "px"; p.style.top = r.bottom + 8 + "px";
+  return true;
+}
+function closeKinds() { $("kpop").hidden = true; markOpenChip(); }
+// the colour whose menu is showing looks pressed, so it's clear what the menu belongs to
+function markOpenChip() { const c = $("kpop").hidden ? null : $("kpop")._cat; document.querySelectorAll("#chips .chip[data-cat]").forEach(b => b.classList.toggle("open", b.dataset.cat === c)); }
+function setFocus(cat, kinds) { changedOn = false; focusCat = cat; focusKinds = new Set(kinds || []); drawHeader(); markOpenChip(); open(current, null, "filter"); }
+$("kpop").addEventListener("click", e => {
+  const p = $("kpop"), cat = p._cat, b = e.target.closest("button"); if (!b) return;
+  if (b.classList.contains("kclear")) { setFocus(null); closeKinds(); return; }
+  if (b.hasAttribute("data-all")) setFocus(focusCat === cat && !focusKinds.size ? null : cat);
+  else { const id = +b.dataset.k, ks = new Set(focusCat === cat ? focusKinds : []); ks.has(id) ? ks.delete(id) : ks.add(id); setFocus(cat, ks); }
+  p._draw();
+});
+document.addEventListener("mousedown", e => { if (!$("kpop").hidden && !e.target.closest("#kpop, #chips")) closeKinds(); });
+document.addEventListener("mousedown", e => { if (!$("insp").hidden && !e.target.closest("#insp, #map .b.inspected")) closeInsp(); });
+// details live on hover: anything with data-tip shows a small hint at once (no delay), under it or above if there's no room
+let hintEl = null;
+document.addEventListener("mouseover", e => {
+  const el = e.target.closest?.("[data-tip]"), h = $("hint");
+  if (el === hintEl) return;
+  hintEl = el;
+  if (!el || !el.dataset.tip) { h.hidden = true; return; }
+  h.textContent = el.dataset.tip; h.hidden = false;
+  const r = el.getBoundingClientRect(), w = h.offsetWidth, ht = h.offsetHeight;
+  // menu rows put the hint beside the menu, so it never covers the next row
+  if (el.dataset.tipSide === "right" && r.right + 14 + w < innerWidth - 8) { h.style.left = r.right + 14 + "px"; h.style.top = r.top + r.height / 2 - ht / 2 + "px"; return; }
+  const x = Math.min(Math.max(8, r.width > 240 ? r.left : r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  const y = r.bottom + 6 + ht > innerHeight - 8 ? r.top - ht - 6 : r.bottom + 6;
+  h.style.left = x + "px"; h.style.top = y + "px";
+});
+const dropHint = () => { $("hint").hidden = true; hintEl = null; };
+["mousedown", "keydown", "wheel"].forEach(t => addEventListener(t, dropHint, { capture: true, passive: true }));
+let toastTimer;
+function toast(html, ms = 6000) {
+  const t = $("toast"); t.innerHTML = html; t.classList.remove("out"); t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.classList.add("out"); toastTimer = setTimeout(() => { t.hidden = true; t.classList.remove("out"); }, 180); }, ms);
+}
+$("tray-clear").onclick = () => { picked.clear(); syncSelection(); };
+let cfItems = [];   // [{ path, size }] in the open confirm
+// The Trash is picked like anything else, but it's emptied, not moved: on its own the tray empties it (macOS asks first);
+// with other things picked, they move to the Trash and then the Empty Trash question follows.
+const TRASH = () => HOME + "/.Trash";
+let emptyAfter = false;
+$("tray-go").onclick = () => {
+  const eff = effective(), rest = eff.filter(p => p !== TRASH());
+  emptyAfter = false;
+  if (eff.includes(TRASH())) { picked.delete(TRASH()); syncSelection(); if (!rest.length) return emptyTrash(); emptyAfter = true; }
+  openConfirm(rest.map(p => ({ path: p, size: picked.get(p) })));
+};
+// a set of identical files this would leave with no copy at all: every copy goes, and at least one was picked by
+// itself (trashing a whole folder that happens to hold every copy is fine)
+function wholeSet(paths, groups) {
+  const own = new Set(paths), has = f => own.has(f) || paths.some(p => f.startsWith(p + "/"));
+  return (groups || []).find(g => g.kind === "exact" && g.files.length > 1 && g.files.some(f => own.has(f.path)) && g.files.every(f => has(f.path)));
+}
+const keepOneToast = g => toast(`<span>That's every copy of ${esc(base(g.files[0].path))}. Leave one out.</span>`, 5000);
+function openConfirm(items) {
+  closeInsp();
+  const all = wholeSet(items.map(x => x.path), dupes?.groups); if (all) { hide("confirm"); return keepOneToast(all); }
+  cfItems = items;
+  const eff = items.map(x => x.path), size = new Map(items.map(x => [x.path, x.size])), total = items.reduce((s, x) => s + x.size, 0);
+  const care = eff.filter(needsCare);
+  $("cf-title").textContent = `Move ${eff.length} item${eff.length === 1 ? "" : "s"} (${fmt(total)}) to the Trash?`;
+  $("cf-warn").hidden = !care.length;
+  $("cf-warn").textContent = care.length ? `${care.length === eff.length ? (care.length === 1 ? "This is" : "These are") : `${care.length} ${care.length === 1 ? "is" : "are"}`} app data. Check the app doesn't need ${care.length === 1 ? "it" : "them"}.` : "";
+  $("cf-list").innerHTML = eff.map(p => `<li data-p="${esc(p)}">${tile(meta.get(p) || asItem(p))}<span data-tip="${esc(tilde(p))}">${esc(label(meta.get(p) || asItem(p)))}<em>${esc(whereOf(p))}</em></span>${needsCare(p) ? `<i class="tag review">Check</i>` : ""}<b class="num">${fmt(size.get(p))}</b><button class="rm" aria-label="Leave this out" data-tip="Leave out">${ICON.x}</button></li>`).join("");
+  $("cf-first").hidden = !NATIVE || (() => { try { return localStorage.getItem("rumi-trashed-before") === "1"; } catch { return false; } })();
+  show("confirm");
+  $("cf-yes").focus();
+}
+$("cf-list").addEventListener("click", e => {
+  const b = e.target.closest(".rm"); if (!b) return;
+  const p = b.closest("li").dataset.p;
+  picked.delete(p); syncSelection();
+  const left = cfItems.filter(x => x.path !== p);
+  if (!left.length) { hide("confirm"); return; }
+  openConfirm(left);
+});
+$("confirm").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.target.closest("#cf-no, .rm")) { e.preventDefault(); $("cf-yes").click(); }
+  if (e.key === "Tab") { const f = [...$("confirm").querySelectorAll("button")]; const i = f.indexOf(document.activeElement);
+    e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus(); }
+});
+$("cf-no").onclick = () => { emptyAfter = false; hide("confirm"); };
+let lastTrashed = [], trashing = false;
+$("cf-yes").onclick = async () => {
+  if (trashing || $("confirm").hidden || $("confirm").classList.contains("closing")) return;
+  trashing = true;
+  try { await trashConfirmed(); } finally { trashing = false; }
+};
+// drop picks for things that are gone, and for everything inside them
+function unpickUnder(paths) {
+  for (const p of [...picked.keys()]) if (paths.some(g => p === g || p.startsWith(g + "/"))) picked.delete(p);
+  syncSelection();
+}
+async function trashConfirmed() {
+  hide("confirm");
+  const eff = cfItems.map(x => x.path), size = new Map(cfItems.map(x => [x.path, x.size]));
+  if (!dupes?.groups) { const d = await api("/api/dupes").catch(() => null), all = wholeSet(eff, d?.groups); if (all) return keepOneToast(all); }
+  toast("Moving to the Trash…", 60000);
+  let res;
+  try { res = await api("/api/trash", { paths: eff }); }
+  catch (e) { toast("Couldn't move these to the Trash: " + esc(e.message || e)); return; }
+  try { localStorage.setItem("rumi-trashed-before", "1"); } catch {}
+  const ok = res.results.filter(r => r.ok), bad = res.results.filter(r => !r.ok);
+  lastTrashed = ok.filter(r => r.trashed).map(r => ({ from: r.trashed, to: r.path }));
+  const freed = ok.reduce((s, r) => s + (size.get(r.path) || 0), 0);
+  unpickUnder(ok.map(r => r.path));
+  vGone(new Set(ok.map(r => r.path)));
+  if (ok.length && !REDUCED.matches) {
+    const gone = new Set(ok.map(r => r.path));
+    document.querySelectorAll("#map .b[data-path]").forEach(el => { if (gone.has(el.dataset.path)) el.classList.add("eject"); });
+    document.querySelectorAll("#pane .row[data-row]").forEach(rw => { if (!gone.has(rw.dataset.row)) return;
+      rw.style.height = rw.offsetHeight + "px"; void rw.offsetWidth; rw.classList.add("gone"); rw.style.height = "0px"; });
+    await wait(520);
+  }
+  await refresh().catch(() => {});
+  const why = bad.length ? ` · ${bad.length} skipped: ${esc(bad[0].error)}` : "";
+  if (ok.length) react("happy", 2600);
+  toast(ok.length ? `${Rumi.svg("happy", { size: 30, simple: true })}<span>${fmt(freed)} moved to the Trash${why}</span>
+    ${lastTrashed.length ? `<button class="btn small primary" id="toast-undo">Undo</button>` : ""}<button class="btn small ghost" id="toast-empty">Empty Trash…</button>`
+    : `<span>Nothing moved${why}</span>`, 20000);
+  const te = $("toast-empty"); if (te) te.onclick = emptyTrash;
+  const tu = $("toast-undo"); if (tu) tu.onclick = undoTrash;
+  if (emptyAfter) { emptyAfter = false; if (ok.length) emptyTrash(); }
+}
+async function undoTrash() {
+  const items = lastTrashed; lastTrashed = [];
+  if (!items.length) return;
+  toast("Putting back…", 30000);
+  const r = await api("/api/put-back", { items }).catch(e => ({ ok: false, error: e.message }));
+  if (r.back) react("wink", 1600);
+  toast(r.back ? `${Rumi.svg("wink", { size: 30, simple: true })}<span>Put back ${r.back} item${r.back === 1 ? "" : "s"}${r.error ? " · " + esc(r.error) : ""}</span>` : "Couldn't put them back: " + esc(r.error || "unknown problem"));
+  const s = await api("/api/status").catch(() => null); if (s) { status = s; drawFresh(); watch(); }
+}
+async function emptyTrash() {
+  const msg = NATIVE ? "Empty the Trash?|Deletes everything in it for good, not just what Rumi moved.|Empty Trash"
+                     : "Empty the Trash? Deletes everything in it for good, not just what Rumi moved.";
+  if (!confirm(msg)) return;
+  toast("Emptying…", 60000);
+  const r = await api("/api/empty-trash", {}).catch(e => ({ ok: false, error: e.message || String(e) }));
+  await refresh().catch(() => {});
+  if (r.ok) react("happy", 2600);
+  toast(r.ok ? `${Rumi.svg("happy", { size: 30, simple: true })}<span>Trash emptied</span>` : "Finder couldn't empty the Trash: " + esc(r.error));
+}
+/* ---------- macOS keeps this: the space outside Home and Applications ---------- */
+// what the locked cartridge prints on its label: the biggest parts once they're measured
+function hiddenLabel(h) {
+  const rows = hiddenData?.status === "ready" ? hiddenData.rows.filter(r => r.size > 5e8) : [];
+  if (!rows.length) return `<span class="m">Measuring…</span>`;
+  const fit = Math.max(1, Math.min(rows.length, Math.floor((h - 190) / 27)));
+  return `<span class="hl">${rows.slice(0, fit).map(r => `<span><b>${esc(r.title.replace(/ & .*/, ""))}</b><i class="num">${fmt(r.size)}</i></span>`).join("")}<span class="more">See all</span></span>`;
+}
+function hiddenBytes() {
+  if (!status || !overview) return 0;
+  const scanned = Object.values(overview.cats).reduce((a, b) => a + b, 0);
+  return Math.max(0, status.disk.used - scanned);
+}
+let hiddenData = null, hiddenPolling = false;
+const HCOL = { macos: "#c2bdb1", assets: "var(--c-app)", swap: "var(--c-audio)", system: "var(--c-cache)", library: "var(--c-image)", tools: "var(--c-dev)", users: "var(--c-docs)" };
+function openHidden() {
+  closeInsp(); $("tip").hidden = true;
+  drawHidden(); show("hidden");
+  if (hiddenData?.status !== "ready" || Date.now() / 1000 - hiddenData.measuredAt > 600) pollHidden();
+}
+async function pollHidden() {
+  if (hiddenPolling) return; hiddenPolling = true;
+  try {
+    for (let i = 0; i < 90; i++) {
+      const r = await api("/api/hidden").catch(() => null);
+      if (r) hiddenData = r.status === "ready" || !hiddenData ? r : hiddenData;
+      if (r?.status === "ready") break;
+      if (!$("hidden").hidden) drawHidden();
+      await wait(700);
+    }
+  } finally { hiddenPolling = false; }
+  if (!$("hidden").hidden) drawHidden();
+  if (current === "" && hiddenData?.status === "ready" && !document.querySelector("#map .layer.boot")) redraw();
+}
+function drawHidden() {
+  const d = status.disk, total = hiddenBytes(), [n, u] = fmt(total, true);
+  $("hd-size").innerHTML = `${n}<small>${u}</small>`;
+  const ready = hiddenData?.status === "ready";
+  if (!ready) {
+    $("hd-bar").innerHTML = "";
+    $("hd-rows").innerHTML = `<div class="hwait">${Rumi.svg("scan", { size: 54 })}<span>Measuring…</span></div>`;
+  } else {
+    const rows = hiddenData.rows.filter(r => r.size > 2e8);
+    const measured = rows.reduce((a, r) => a + r.size, 0);
+    rows.push({ id: "private", title: "Private to macOS", size: Math.max(0, total - measured),
+      note: `Spotlight's index and folders apps can't read${status.denied ? `, including ${status.denied.toLocaleString()} in your home` : ""}` });
+    const all = Math.max(total, measured);
+    $("hd-bar").innerHTML = rows.filter(r => r.size > 0).map(r => `<i class="${r.id === "private" ? "priv" : ""}" style="flex:${r.size / all};${r.id === "private" ? "" : `background:${HCOL[r.id] || "var(--c-other)"}`}" title="${esc(r.title)}"></i>`).join("");
+    const snaps = hiddenData.snapshots || 0;
+    const snapNote = snaps ? `Newest from ${snapDate(hiddenData.newestSnapshot)}. macOS removes them when it needs room; their size isn't shown.` : "";
+    $("hd-rows").innerHTML = rows.map(r => `<div class="hrow"><i class="${r.id === "private" ? "priv" : ""}" style="${r.id === "private" ? "" : `background:${HCOL[r.id] || "var(--c-other)"}`}"></i>
+        <div class="ht" data-tip="${esc(r.note)}"><b>${esc(r.title)}</b>${r.warn ? `<div class="warnline">${esc(r.warn)}</div>` : ""}</div>
+        <span class="num">${fmt(r.size)}</span>${r.path ? `<button class="btn small ghost" data-reveal="${esc(r.path)}" title="Show in Finder">${ICON.finder}</button>` : "<span></span>"}</div>`).join("")
+      + `<div class="hrow"><i class="ring"></i><div class="ht"${snapNote ? ` data-tip="${esc(snapNote)}"` : ""}><b>Time Machine snapshots</b></div><span class="num dim">${snaps || "None"}</span><span></span></div>`;
+  }
+  $("hd-free").hidden = !(d.purgeable > 3e8);
+  $("hd-free").innerHTML = d.purgeable > 3e8 ? `<b>${fmt(d.free)} free</b> · ${fmt(d.freeNow)} now, ${fmt(d.purgeable)} more when macOS clears caches` : "";
+}
+function snapDate(name) {
+  const m = /(\d{4})-(\d{2})-(\d{2})/.exec(name || ""); if (!m) return "recently";
+  return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+$("hd-x").onclick = () => hide("hidden");
+$("hidden").addEventListener("mousedown", e => { if (e.target.id === "hidden") hide("hidden"); });
+$("hd-rows").addEventListener("click", e => { const r = e.target.closest("[data-reveal]"); if (r) reveal(r.dataset.reveal); });
+
+/* ---------- like Finder: Space previews, right-click menu, ⌘⌫, drag cartridges out ---------- */
+let hoverP = null, qlOpen = false, dragClick = false;
+document.addEventListener("mouseover", e => {
+  const el = e.target.closest?.("#map .b[data-path], #pane .row[data-row], #v-frame:not(.isvid)[data-path]");
+  const p = el ? el.dataset.path || el.dataset.row : null;
+  if (p === hoverP) return;
+  hoverP = p;
+  if (!NATIVE) return;
+  api("/native/hover", { path: p }).catch(() => {});
+  if (qlOpen && p) ql("update");
+});
+async function ql(mode) {
+  if (!NATIVE) return;
+  const p = hoverP || inspEl?.dataset.path;
+  const r = await api("/native/quicklook", { paths: p && mode !== "close" ? [p] : [], mode }).catch(() => null);
+  qlOpen = !!r?.open;
+}
+const sizeOf = p => meta.get(p)?.size || picked.get(p) || +(document.querySelector(`#pane [data-row="${CSS.escape(p)}"]`)?.dataset.size || 0);
+// Folders Rumi never offers to trash (the Mac side refuses them too)
+const keepFolder = p => !p || p === HOME || (status?.roots || []).includes(p) || !!protectedPlace(p) ||
+  ["Library", "Desktop", "Documents", "Downloads", "Pictures", "Movies", "Music", ".Trash"].some(x => p === HOME + "/" + x);
+function trashOne(p) {
+  emptyAfter = false;
+  const k = meta.get(p) || asItem(p), owner = ownerOf(p);
+  if (owner) return toast(`<span>Part of ${esc(owner)}, so it stays</span>`, 4000);
+  if (keepFolder(p)) return toast(`<span>${esc(label(k) || p)} stays. Open it to pick what's inside.</span>`, 4000);
+  openConfirm([{ path: p, size: sizeOf(p) }]);
+}
+async function contextMenu(p) {
+  $("tip").hidden = true;
+  if (!NATIVE) return reveal(p);
+  const k = meta.get(p) || asItem(p, null, guessType(p)), owner = ownerOf(p) || (keepFolder(p) ? "keep" : null);
+  const folder = k.type === "dir" && !isApp(k) && !k.pkg;
+  const r = await api("/native/menu", { items: [
+    { id: "open", title: folder ? "Open" : isApp(k) ? `Open ${label(k)}` : "Open" },
+    { id: "ql", title: "Quick Look", key: " " },
+    { id: "reveal", title: "Show in Finder" },
+    { sep: true },
+    { id: "pick", title: picked.has(p) ? "Remove from Clean up" : "Add to Clean up", enabled: !owner },
+    { sep: true },
+    { id: "trash", title: "Move to Trash…", key: "\b", cmd: true, enabled: !owner },
+  ] }).catch(() => null);
+  switch (r?.chosen) {
+    case "open": if (folder) { closeInsp(); open(p, document.querySelector(`#map .b[data-path="${CSS.escape(p)}"]`)); } else api("/native/open", { path: p }); break;
+    case "ql": hoverP = p; ql("toggle"); break;
+    case "reveal": reveal(p); break;
+    case "pick": toggle(p, sizeOf(p), undefined, k); break;
+    case "trash": trashOne(p); break;
+  }
+}
+$("pane").addEventListener("contextmenu", e => {
+  const rw = e.target.closest(".row[data-row]"); if (!rw) return;
+  e.preventDefault(); contextMenu(rw.dataset.row);
+});
+// a native drag ends without the click WebKit would otherwise send to the cartridge
+window.rumiDragStarted = () => { dragClick = true; $("tip").hidden = true; };
+document.addEventListener("mousedown", () => { dragClick = false; }, true);
+document.addEventListener("click", e => { if (dragClick) { dragClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+window.rumiMovedAway = async p => {
+  unpickUnder([p]);
+  await refresh().catch(() => {});
+  toast(`<span>Moved ${esc(base(p))}</span>`, 4000);
+};
+if (NATIVE) $("hint-ql").hidden = $("hint-trash").hidden = false;
+
+function redraw() { if (treeCache.has(current)) getView(current).then(x => drawMap(x.node)).catch(() => {}); }
+
+async function refresh() {
+  treeCache = new Map(); filterCache = new Map(); sugg = null; dupes = null; dupesRev = null;
+  [status, overview] = await Promise.all([api("/api/status"), api("/api/overview")]); loadKinds();
+  drawHeader();
+  const p = await nearestFolder(current);
+  await open(p, null, p === current ? undefined : "soft");
+  drawPane(); drawFresh();
+  watch();
+}
+$("access-open").onclick = () => {
+  api("/native/open-privacy", {}).catch(() => {});
+  $("access").classList.add("waiting"); Rumi.mount($("access-rumi"), "scan", { size: 92 });
+  $("access-h").textContent = "Over to System Settings";
+  $("access-p").innerHTML = `Turn on <b>Rumi</b>, then choose <b>Quit &amp; Reopen</b>.`;
+};
+$("access-skip").onclick = () => api("/native/skip-access", {}).then(() => hide("access")).catch(() => hide("access"));
+function showAccessCard() { Rumi.mount($("access-rumi"), $("access").classList.contains("waiting") ? "scan" : "sleep", { size: 92 }); show("access"); }
+function showAccess() {   // Rumi menu › Full Disk Access…, and the "kept private" note
+  showAccessCard();
+  if (status && status.access !== "needed") { $("access-skip").textContent = "Not now"; $("access-skip").onclick = () => hide("access"); }
+}
+$("rescan").onclick = async () => {
+  if (status?.refreshing) return;
+  try { await api("/api/rescan", {}); } catch (e) { toast("Couldn't rescan: " + esc(e.message || e), 4000); return; }
+  const s = await api("/api/status").catch(() => null);
+  // with a map already on screen the rescan runs quietly behind it; otherwise show the scanning screen
+  if (s?.ready && s.refreshing) { status = s; drawFresh(); watch(); } else { status = null; poll(); }
+};
+addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("input, select, textarea")) return;
+  if (e.metaKey && (e.key === "f" || e.key === "k")) { e.preventDefault(); if (!dialogUp() && !V.open) openFind(); return; }
+  if (e.key === "Escape" && !$("kpop").hidden) { closeKinds(); return; }
+  if (e.key === "Escape" && !$("confirm").hidden) { emptyAfter = false; hide("confirm"); return; }
+  if (e.key === "Escape" && !$("hidden").hidden) { hide("hidden"); return; }
+  // behind a dialog the map stays put: Backspace, ⌘[ ⌘] and ⌘↑ do nothing (the dialog's own keys still work)
+  if (dialogUp()) { if (e.key === "Backspace" || (e.metaKey && /^(\[|\]|ArrowUp)$/.test(e.key))) e.preventDefault(); return; }
+  if (V.open) {
+    const k = V.list[V.i], vid = $("v-frame").querySelector("video");
+    if (e.key === "Escape") { e.preventDefault(); closeViewer(); }
+    else if (isDoc(k) && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === " ")) {   // pages and code scroll instead
+      const c = $("v-frame").querySelector(".vcode"); e.preventDefault();
+      if (c) c.scrollBy({ top: (e.key === "ArrowUp" || (e.key === " " && e.shiftKey) ? -1 : 1) * (e.key === " " ? c.clientHeight * .85 : 60), behavior: "smooth" });
+    }
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); vStep(1); }
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); vStep(-1); }
+    else if (e.key === " " && e.target !== vid) { e.preventDefault(); if (vid) vid.paused ? vid.play() : vid.pause(); else closeViewer(); }
+    else if (e.metaKey && e.key === "Backspace") { e.preventDefault(); if (!ownerOf(k.path)) trashOne(k.path); }
+    else if (e.key === "Backspace" || (e.metaKey && /^(\[|\]|ArrowUp)$/.test(e.key))) e.preventDefault();
+    return;
+  }
+  if (e.key === "Escape" && qlOpen) { ql("close"); return; }
+  const target = hoverP || inspEl?.dataset.path;
+  if (e.key === " " && !e.metaKey && NATIVE && (target || qlOpen)) { e.preventDefault(); ql(target ? "toggle" : "close"); return; }
+  if (e.metaKey && e.key === "Backspace") { e.preventDefault(); if (target) trashOne(target); return; }
+  if (e.key === "Escape" && !$("insp").hidden) { closeInsp(); return; }
+  if (e.metaKey && e.key === "[") { e.preventDefault(); return goBack(); }
+  if (e.metaKey && e.key === "]") { e.preventDefault(); return goForward(); }
+  const up = e.key === "Escape" || e.key === "Backspace" || (e.metaKey && e.key === "ArrowUp");
+  if (up) { e.preventDefault(); closeInsp(); goUp(); }
+});
+addEventListener("resize", () => closeInsp());
+
+/* ---------- boot ---------- */
+// the file count runs smoothly between status checks instead of jumping every half second
+function countTo(el, n) {
+  const from = +(el.dataset.n || 0); el.dataset.n = n; cancelAnimationFrame(el._raf);
+  if (REDUCED.matches || !from || n <= from) { el.textContent = n.toLocaleString(); return; }
+  const t0 = performance.now(), step = t => { const k = Math.min(1, (t - t0) / 480); el.textContent = Math.round(from + (n - from) * k).toLocaleString(); if (k < 1) el._raf = requestAnimationFrame(step); };
+  el._raf = requestAnimationFrame(step);
+}
+async function poll() {
+  if (!performance.getEntriesByName("poll").length) performance.mark("poll");
+  try { status = await api("/api/status"); }
+  catch (e) {
+    show("scanning"); Rumi.mount($("scan-rumi"), "empty", { size: 128 });
+    $("scan-h").textContent = "Something went wrong";
+    $("scan-msg").textContent = "Quit Rumi and open it again.";
+    return;
+  }
+  HOME = status.home;
+  if (status.loading) { setTimeout(poll, 60); return; }   // last launch's map is being read; it takes a moment
+  if (status.access === "needed") { showAccessCard(); hide("scanning"); setTimeout(poll, 700); return; }
+  hide("access");
+  if (!status.ready) {
+    show("scanning"); Rumi.mount($("scan-rumi"), "scan", { size: 128 });
+    $("scan-h").textContent = "Mapping your Mac";
+    countTo($("scan-count"), status.files);
+    $("scan-msg").textContent = "files";
+    drawHeader();
+    setTimeout(poll, 500); return;
+  }
+  hide("scanning");
+  if (!booted) { booted = true; if (params.get("path") !== null) current = params.get("path"); else if (status.roots.length === 1) current = status.roots[0]; }
+  performance.mark("ready");
+  await refresh();
+  performance.mark("map");
+  drawFresh(); drawDenied();
+  setTimeout(pollHidden, 1200);   // the locked cartridge's label fills in once the system side is measured
+  watch();
+}
+function drawDenied() {
+  $("denied-note")?.remove();
+  if (status?.denied) $("status").insertAdjacentHTML("beforeend", `<button id="denied-note" class="linkish" data-tip="${NATIVE ? "Folders macOS keeps private. Click to give Rumi access" : "Folders macOS keeps private"}">${ICON.lock}${status.denied.toLocaleString()} private</button>`);
+  const dn = $("denied-note"); if (dn && NATIVE) dn.onclick = showAccess;
+}
+const since = t => {
+  const m = Math.round((Date.now() / 1000 - t) / 60);
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : ago(t);
+};
+// The Rescan button doubles as the freshness indicator: it spins while a quiet rescan runs behind the map.
+function drawFresh() {
+  if (!status) return;
+  const b = $("rescan"), busy = !!status.refreshing;
+  b.classList.toggle("busy", busy); b.setAttribute("aria-busy", busy);
+  drawBrand();
+  $("rescan-l").textContent = busy ? "Updating" : "Rescan";
+  b.dataset.tip = busy ? "Updating in the background" : status.scannedAt ? `Updated ${since(status.scannedAt)} · ⌘R` : "⌘R";
+}
+// One quiet loop while anything runs behind the map: a rescan (swap in the fresh map when done) or the duplicate check.
+let watching = false, dupesRev = null;
+async function watch() {
+  if (watching) return; watching = true;
+  try {
+    for (;;) {
+      const prev = status;
+      let s; try { s = await api("/api/status"); } catch { await wait(2000); continue; }
+      status = s; drawFresh();
+      if (prev?.refreshing && !s.refreshing && s.ready) await softRefresh();
+      const d = s.dupes;
+      if (d.status === "done" && (d.rev ?? 0) !== dupesRev) { dupes = await api("/api/dupes"); dupesRev = d.rev ?? 0; setBadges(); if (tab === "dupes") drawPane(); }
+      else if (d.status !== "done" && !(dupes?.groups?.length)) badge("b-dupes", "checking…");
+      if (!s.refreshing && d.status === "done") break;
+      await wait(s.refreshing ? 700 : 2000);
+    }
+  } finally { watching = false; }
+}
+// Fresh scan finished: redraw where the user is, without the zoom animation. If that folder is gone, step up to one that exists.
+async function softRefresh() {
+  treeCache = new Map(); filterCache = new Map(); sugg = null;
+  try { overview = await api("/api/overview"); } catch {}
+  loadKinds();
+  drawHeader(); drawDenied();
+  const p = await nearestFolder(current);
+  if ($("insp").hidden && $("confirm").hidden) await open(p, null, "soft");
+  else current = p;
+  drawPane(); setBadges();
+}
+// the folder itself if it's still on the map, else the closest folder above it that is ("" is This Mac)
+async function nearestFolder(p) {
+  while (p) {
+    try { await getTree(p); break; }
+    catch { const up = p.slice(0, p.lastIndexOf("/")); p = (status?.roots || []).some(r => up === r || up.startsWith(r + "/")) ? up : ""; }
+  }
+  return p;
+}
+function badge(id, text) {
+  const el = $(id); if (el.textContent === text) return;
+  el.textContent = text; if (REDUCED.matches) return;
+  el.classList.remove("tick"); void el.offsetWidth; el.classList.add("tick");
+}
+function setBadges() {
+  if (sugg) { const t = sugg.reduce((a, s) => a + s.size, 0); badge("b-cleanup", t ? fmt(t) : " "); }
+  if (dupes?.groups && (dupes.status === "done" || dupes.groups.length)) { const w = dupes.groups.filter(g => g.kind === "exact").reduce((a, g) => a + g.waste, 0); badge("b-dupes", w ? fmt(w) : "none"); }
+}
+// redraw only when the map's size really changed (the observer also fires once at start, which used to cut the intro short)
+let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { const m = $("map"); if (m._wh !== m.clientWidth + "x" + m.clientHeight) redraw(); }, 80); }).observe($("map"));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawHeader(); redraw(); });
+const brandR = { mood: "idle", until: 0, t: 0 };
+function drawBrand() {
+  const mood = Date.now() < brandR.until ? brandR.mood : status?.refreshing ? "scan" : "idle";
+  Rumi.mount($("brand-rumi"), mood, { simple: true, size: 26 });
+}
+function react(mood, ms) { brandR.mood = mood; brandR.until = Date.now() + ms; drawBrand(); clearTimeout(brandR.t); brandR.t = setTimeout(drawBrand, ms + 30); }
+$("brand-rumi").onclick = () => react("wink", 1300);
+let lookRAF = 0;
+addEventListener("mousemove", e => {
+  if (lookRAF || REDUCED.matches) return;
+  lookRAF = requestAnimationFrame(() => {
+    lookRAF = 0; const el = $("brand-rumi"), r = el.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / 260);
+    el.style.setProperty("--lx", (dx / d * k * 9).toFixed(1) + "px"); el.style.setProperty("--ly", (dy / d * k * 6).toFixed(1) + "px");
+  });
+}, { passive: true });
+document.addEventListener("mouseleave", () => { const el = $("brand-rumi"); el.style.setProperty("--lx", "0px"); el.style.setProperty("--ly", "0px"); });
+drawBrand();
+poll();
+</script>
+</body>
+</html>

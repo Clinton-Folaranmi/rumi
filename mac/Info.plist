@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key><string>com.clinton.rumi</string>
+	<key>CFBundleName</key><string>Rumi</string>
+	<key>CFBundleDisplayName</key><string>Rumi</string>
+	<key>CFBundleExecutable</key><string>Rumi</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>1.0.0</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>LSMinimumSystemVersion</key><string>14.0</string>
+	<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
+	<key>NSHighResolutionCapable</key><true/>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSHumanReadableCopyright</key><string>© 2026 Clinton. MIT licence.</string>
+	<key>NSAppleEventsUsageDescription</key><string>Rumi asks Finder to move things to the Trash, so Put Back still works, and to empty the Trash when you ask.</string>
+	<key>NSDesktopFolderUsageDescription</key><string>Rumi measures how much space your Desktop uses. It only reads names and sizes.</string>
+	<key>NSDocumentsFolderUsageDescription</key><string>Rumi measures how much space your Documents use. It only reads names and sizes.</string>
+	<key>NSDownloadsFolderUsageDescription</key><string>Rumi measures how much space your Downloads use. It only reads names and sizes.</string>
+</dict>
+</plist>

@@ -1,0 +1,6 @@
+.DS_Store
+.build/
+build/
+*.zip
+__pycache__/
+.signing-identity

@@ -114,7 +114,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
 <div class="find" id="find" hidden><div class="fbox">
   <div class="fin"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><input id="f-q" placeholder="Search files and folders" spellcheck="false" autocomplete="off"><span id="f-n" class="num"></span></div>
   <div class="flist" id="f-list"></div>
-  <div class="ffoot"><span><kbd>↵</kbd> open</span><span><kbd>⌘↵</kbd> show on map</span><span><kbd>esc</kbd> close</span></div>
+  <div class="ffoot"><span><kbd>↵</kbd> open</span><span><kbd>⌘↵</kbd> show in Finder</span><span><kbd>⌥↵</kbd> show on map</span><span><kbd>esc</kbd> close</span></div>
 </div></div>
 <div class="kpop" id="kpop" hidden></div>
 <div class="tip" id="tip" hidden></div>
@@ -123,68 +123,15 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
 <div class="hint" id="hint" hidden></div>
 
 <script src="/rumi.js"></script>
+<script src="/base.js"></script>
+<script src="/find.js"></script>
 <script>
-const CAT = {
-  video: "Video", image: "Photos", audio: "Audio", docs: "Documents", archive: "Archives",
-  dev: "Developer", app: "Apps", cache: "Caches", other: "Other",
-};
-const THUMB_EXT = new Set("jpg jpeg png gif heic heif webp tif tiff psd dng cr2 cr3 nef arw bmp svg mp4 mov m4v mkv avi webm pdf key pages numbers ai sketch".split(" "));
-const PHOTO_EXT = new Set("jpg jpeg png gif heic heif webp tif tiff psd dng cr2 cr3 nef arw bmp mp4 mov m4v mkv avi webm".split(" "));
-// colour tokens are read once per task (one map draw asks for hundreds), then read fresh next time
-const cssCache = new Map();
-function css(v) {
-  if (!cssCache.size) queueMicrotask(() => cssCache.clear());
-  let x = cssCache.get(v);
-  if (x === undefined) { x = getComputedStyle(document.documentElement).getPropertyValue(v).trim(); cssCache.set(v, x); }
-  return x;
-}
-const color = c => css("--c-" + (CAT[c] ? c : "other"));
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const wait = ms => new Promise(r => setTimeout(r, ms));
-// overlays fade in by CSS; hide() lets them fade out before they go
-function show(id) { $("hint").hidden = true; const el = $(id); clearTimeout(el._t); el.classList.remove("closing"); el.hidden = false; }
-function hide(id) {
-  const el = $(id); $("hint").hidden = true; if (el.hidden || el.classList.contains("closing")) return;
-  el.classList.add("closing"); el._t = setTimeout(() => { el.hidden = true; el.classList.remove("closing"); }, 160);
-}
-
-const params = new URLSearchParams(location.search);
-let TOKEN = params.get("t") || sessionStorage.getItem("sm-token") || "";
-if (params.get("t")) { sessionStorage.setItem("sm-token", TOKEN); const u = new URL(location.href); u.searchParams.delete("t"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
 /* ---------- map geometry (cartridge) ----------
    gap between cartridges, gap inside a tray, a tray's heading (its name, then its stripe) and padding;
    app icons sit in the label's art box */
 const LAYOUT = { gap: 18, igap: 10, head: 48, pad: 12, iconMax: 88, iconW: 0.6,
   iconBox: (w, h) => w < 100 || h < 70 ? [7, 9] : [h < 150 ? 44 : 70, Math.max(18, h * 0.24) + 4] };
 
-const NATIVE = window.webkit?.messageHandlers?.rumi;   // set when running inside the Rumi Mac app
-async function api(path, body) {
-  if (body && NATIVE) return NATIVE.postMessage({ path, body });
-  const r = await fetch(path, body ? { method: "POST", headers: { "X-Token": TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(body) }
-                                   : { headers: { "X-Token": TOKEN } });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
-  return r.json();
-}
-
-function fmt(b, parts) {
-  if (b == null) return "";
-  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
-  while (b >= 1000 && i < u.length - 1) { b /= 1000; i++; }
-  const n = i >= 3 ? b.toFixed(b < 10 ? 2 : 1) : String(Math.round(b));
-  return parts ? [n, u[i]] : n + " " + u[i];
-}
-function ago(t) {
-  if (!t) return "";
-  const d = (Date.now() / 1000 - t) / 86400;
-  if (d < 1) return "today"; if (d < 2) return "yesterday"; if (d < 45) return Math.round(d) + " days ago";
-  if (d < 600) return Math.round(d / 30) + " months ago"; return (d / 365).toFixed(1) + " years ago";
-}
-let HOME = "";
-const tilde = p => HOME && p && p.startsWith(HOME) ? "~" + p.slice(HOME.length) : p;
-const base = p => (p || "").split("/").filter(Boolean).pop() || p;
-// the folder something sits in, by name ("Downloads"); the full path is always in the hover hint
-const whereOf = p => { const d = (p || "").slice(0, (p || "").lastIndexOf("/")); return d === HOME ? "Home" : base(d) || "/"; };
 // copies of one file: what tells them apart is the first folder where their paths differ
 function tellApart(paths) {
   const parts = paths.map(p => p.split("/").filter(Boolean).slice(0, -1));
@@ -238,16 +185,9 @@ function sharedLead(par, name) {
   }
   return m.get(name) || 0;
 }
-const ext = n => { const m = /\.([a-z0-9]{1,6})$/i.exec(n || ""); return m ? m[1].toLowerCase() : ""; };
-const isApp = k => /\.app$/.test(k.name || k.path || "");
-const canThumb = k => !!k.path && (isApp(k) || (k.type !== "dir" && THUMB_EXT.has(ext(k.name || k.path))));
-const thumbURL = (p, s) => `/api/thumb?t=${encodeURIComponent(TOKEN)}&path=${encodeURIComponent(p)}${s ? `&s=${s}` : ""}`;
 const chars = (str, cls = "ch") => [...String(str)].map((c, i) => `<span class="${cls}" style="--i:${i}">${c === " " ? "&nbsp;" : esc(c)}</span>`).join("");
 function isLight(c) { if (!/^#[0-9a-f]{6}$/i.test(c)) return false; const n = parseInt(c.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 > 0.62; }
 function hash(str) { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
-const rootName = n => n === HOME || n === "~" ? "Home" : n.startsWith("/") || n.startsWith("~/") ? (n.split("/").filter(Boolean).pop() || n) : n;
-// Finder shows ":" in a file name as "/"
-const label = k => k.name && (k.name.startsWith("/") || k.name === "~") ? rootName(k.name) : (isApp(k) ? k.name.replace(/\.app$/, "") : String(k.name ?? "").replace(/:/g, "/"));
 // keep the end of a long name, where "(7).zip" or the date usually is
 function midTrunc(s, n) {
   s = String(s); if (s.length <= n || n < 12) return s;   // too short to keep both ends: let the label end in "…"
@@ -255,43 +195,6 @@ function midTrunc(s, n) {
   const tail = Math.min(n - 4, Math.max(Math.floor((n - 1) * 0.42), tailHint));
   return s.slice(0, n - 1 - tail).trimEnd() + "…" + s.slice(s.length - tail).trimStart();
 }
-
-const ICON = {
-  folder: `<svg class="i" viewBox="0 0 16 16" style="width:17px;height:17px"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6h5.6c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/></svg>`,
-  finder: `<svg class="i" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M12 9.5v3c0 .6-.4 1-1 1H3.5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1h3"/></svg>`,
-  open: `<svg class="i" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></svg>`,
-  plus: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2.2"><path d="M8 3.5v9M3.5 8h9"/></svg>`,
-  check: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2.2"><path d="M3.8 8.4 6.6 11 12.2 5"/></svg>`,
-  back: `<svg class="i" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>`,
-  x: `<svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>`,
-  info: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.7M8 5.2v.1"/></svg>`,
-  lock: `<svg class="i lk" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`,
-};
-
-function tile(k, size) {
-  const c = color(k.cat), e = ext(k.name || k.path);
-  const lbl = k.type === "dir" && !isApp(k) ? ICON.folder : esc((e || "file").slice(0, 4).toUpperCase());
-  if (canThumb(k)) return `<span class="tile withimg" style="--c:${c}">${lbl}<img class="${isApp(k) ? "app" : ""}" data-src="${thumbURL(k.path)}" onload="this.classList.add('ok')" onerror="this.remove();this.parentNode&&this.parentNode.classList.remove('withimg')"></span>`;
-  return `<span class="tile" style="--c:${c}">${lbl}</span>`;
-}
-
-/* ---------- thumbnail queue ----------
-   Browsers allow ~6 requests at once per site and a new thumbnail takes ~0.7 s to make, so loading them all at once
-   used to block the folder you just clicked. At most 3 load at a time, in on-screen order; ones no longer shown are skipped. */
-const TQ = { q: [], n: 0, max: 3, hold: 0 };
-function qThumb(img, front) { if (img.dataset.q) return; img.dataset.q = 1; front ? TQ.q.unshift(img) : TQ.q.push(img); pumpThumbs(); }
-function pumpThumbs() {
-  while (!TQ.hold && TQ.n < TQ.max && TQ.q.length) {
-    const img = TQ.q.shift(); if (!img.isConnected || img.getAttribute("src")) continue;
-    TQ.n++; let done = false; const fin = () => { if (done) return; done = true; TQ.n--; pumpThumbs(); };
-    img.addEventListener("load", fin, { once: true }); img.addEventListener("error", fin, { once: true }); setTimeout(fin, 12000);
-    img.src = img.dataset.src;
-  }
-}
-new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) {
-  const front = !!n.closest?.("#tip, #insp");
-  if (n.matches("img[data-src]")) qThumb(n, front); n.querySelectorAll("img[data-src]").forEach(i => qThumb(i, front));
-} }).observe(document.body, { childList: true, subtree: true });
 
 /* ---------- state ---------- */
 let current = "";
@@ -305,7 +208,7 @@ let tab = location.hash.slice(1) || "cleanup";
 let booted = false;
 // The caches keep the most recently used entries only, so a long session doesn't grow without end.
 // meta never forgets something that's picked (the tray and the confirm list need it).
-const CAP = { tree: 150, filter: 60, meta: 8000 };
+const CAP = { tree: 50, filter: 30, meta: 4000 };
 function remember(map, key, val, cap) {
   map.delete(key); map.set(key, val);
   if (map.size > cap) for (const k of map.keys()) { if (map.size <= cap) break; if (map !== meta || !picked.has(k)) map.delete(k); }
@@ -830,7 +733,7 @@ function row(o) {
     ${owner ? `<span class="lock" title="Part of ${esc(owner)}"><svg class="i" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg></span>`
             : `<input type="checkbox" aria-label="Add ${esc(title)} to Clean up" data-path="${esc(path)}" data-size="${size}" ${picked.has(path) ? "checked" : ""}>`}
     ${path === TRASH() ? `<span class="tile" style="--c:var(--c-other)"><svg class="i" viewBox="0 0 16 16" style="width:17px;height:17px"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg></span>` : tile(item)}
-    <div class="nm" data-tip="${esc(tilde(path))}"><div class="t"><span class="tt${rtl ? " rtl" : ""}">${rtl ? "‎" : ""}${esc(title)}${rtl ? "‎" : ""}</span>${owner ? `<span class="tag keep long">Part of ${esc(owner.replace(/'s data$/, ""))}</span>` : tag ? `<span class="tag ${tag}">${tagText || (tag === "safe" ? "Safe" : "Check first")}</span>` : ""}</div>
+    <div class="nm"><div class="t"><span class="tt${rtl ? " rtl" : ""}" data-tip="${esc(tilde(path))}">${rtl ? "‎" : ""}${esc(title)}${rtl ? "‎" : ""}</span>${owner ? `<span class="tag keep long">Part of ${esc(owner.replace(/'s data$/, ""))}</span>` : tag ? `<span class="tag ${tag}">${tagText || (tag === "safe" ? "Safe" : "Check first")}</span>` : ""}</div>
       ${why ? `<div class="why">${esc(why)}</div>` : sub ? `<div class="p">‎${esc(sub)}‎</div>` : ""}</div>
     <div class="sz num">${fmt(size)}${sizeNote ? `<small>${esc(sizeNote)}</small>` : ""}</div>
     ${max ? `<div class="bar"><i style="width:${Math.max(1, (size / max) * 100)}%;background:${color(item.cat)}"></i></div>` : ""}
@@ -948,7 +851,7 @@ async function drawPaneBody(pane, live) {
         b += i === 0 ? `<div class="row keeprow" data-size="${f.size}"><span class="lock" title="Rumi keeps this copy">${ICON.check}</span>`
           : `<div class="row" data-row="${esc(f.path)}" data-size="${f.size}"><input type="checkbox" aria-label="Remove this copy" data-path="${esc(f.path)}" data-size="${f.size}" ${picked.has(f.path) ? "checked" : ""}>`;
         b += `
-          <div class="nm" data-tip="${esc(tilde(f.path))}"><div class="t"><span class="tt">${esc(base(f.path))}</span>${apart[i] ? `<span class="in">${esc(apart[i] === base(HOME) ? "Home" : apart[i])}</span>` : ""}${i === 0 ? `<span class="tag keep">${keepLabel}</span>` : ""}</div></div>
+          <div class="nm"><div class="t"><span class="tt" data-tip="${esc(tilde(f.path))}">${esc(base(f.path))}</span>${apart[i] ? `<span class="in">${esc(apart[i] === base(HOME) ? "Home" : apart[i])}</span>` : ""}${i === 0 ? `<span class="tag keep">${keepLabel}</span>` : ""}</div></div>
           <div class="sz num" style="font-weight:450;color:var(--faint);font-size:12px">${ago(f.mtime)}</div>
           <div class="hov"><button data-reveal="${esc(f.path)}">${ICON.finder}Finder</button></div></div>`;
       });
@@ -1230,68 +1133,21 @@ $("v-pick").onclick = () => { const k = V.list[V.i]; toggle(k.path, k.size, unde
 $("v-stage").addEventListener("click", e => { if (e.target === e.currentTarget) closeViewer(); });
 $("v-frame").addEventListener("contextmenu", e => { e.preventDefault(); if (V.open) contextMenu(V.list[V.i].path); });
 addEventListener("resize", vPlace);
-/* ---------- search: ⌘F opens a Spotlight-style panel ----------
-   Empty: what you opened lately, then your biggest files. Typing: Rumi's map answers at once (folders, big files,
-   ~/Library too), Spotlight fills in every other file a moment later. ↵ opens, ⌘↵ shows it on the map. */
-const F = { q: "", seq: 0, idx: [], spot: [], spotDone: false, items: [], sel: 0, empty: null, t: 0 };
-const ICON_SEARCH = `<svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>`;
-const isFolder = k => k.type === "dir" && !k.pkg && !isApp(k);
-const recent = {
-  get() { try { return JSON.parse(localStorage.getItem("rumi-recent") || "[]"); } catch { return []; } },
-  add(k) { try { const r = recent.get().filter(x => x.path !== k.path); r.unshift({ path: k.path, name: k.name, size: k.size, type: k.type, cat: k.cat, pkg: !!k.pkg });
-    localStorage.setItem("rumi-recent", JSON.stringify(r.slice(0, 5))); } catch {} },
-};
+/* ---------- search: ⌘F opens the search panel (its logic is in find.js, shared with the menu-bar panel) ---------- */
 function openFind() {
   if (!status?.ready && !status?.refreshing) return;
   closeInsp(); $("tip").hidden = true; closeKinds();
   show("find"); const i = $("f-q"); i.focus(); i.select(); findRun();
 }
 const closeFind = () => { if (!$("find").hidden) hide("find"); };
-async function findRun() {
-  const q = $("f-q").value.trim(), seq = ++F.seq; F.q = q; F.sel = 0;
-  if (!q) {
-    F.idx = F.spot = []; F.empty = { recent: recent.get(), big: F.empty?.big || [] }; findDraw();
-    const r = await api(`/api/search?q=`).catch(() => null); if (seq === F.seq && r) { F.empty.big = r.results; findDraw(); }
-    return;
-  }
-  F.empty = null; F.spotDone = !NATIVE;
-  const get = src => api(`/api/search?src=${src}&q=${encodeURIComponent(q)}`).catch(() => null);
-  get("index").then(r => { if (seq === F.seq && r && !r.stale) { F.idx = r.results; F.idxQ = q; findDraw(); } });
-  if (NATIVE) get("spotlight").then(r => { if (seq === F.seq && r && !r.stale) { F.spot = r.results; F.spotQ = q; F.spotDone = true; findDraw(); } });
-}
-const fRow = (k, i, q) => {
-  const name = label(k), m = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").exec(name) : null;
-  const hl = m ? esc(name.slice(0, m.index)) + "<mark>" + esc(m[0]) + "</mark>" + esc(name.slice(m.index + m[0].length)) : esc(name);
-  return `<div class="fr ${i === F.sel ? "sel" : ""}" data-i="${i}" data-tip="${esc(tilde(k.path))}">${tile(k)}<div class="fm"><b>${hl}</b><small>${esc(whereOf(k.path))}</small></div><span class="num">${k.size ? fmt(k.size) : ""}</span></div>`;
-};
-function findDraw() {
-  const L = $("f-list"); let html = "", i = 0; F.items = [];
-  const sect = (title, list) => { if (!list.length) return; html += `<div class="fh">${title}</div>`; for (const k of list) { html += fRow(k, i++, F.q); F.items.push(k); } };
-  F.drawnQ = F.empty ? "" : F.q;
-  if (F.empty) {
-    sect("Recent", F.empty.recent); sect("Biggest files", F.empty.big);
-    $("f-n").textContent = "";
-  } else {
-    const seen = new Map();
-    for (const k of [...(F.idxQ === F.q ? F.idx : []), ...(F.spotQ === F.q ? F.spot : [])]) if (!seen.has(k.path)) seen.set(k.path, k);
-    const all = [...seen.values()].sort((a, b) => a.score - b.score || b.size - a.size);
-    const dirs = all.filter(isFolder), files = all.filter(k => !isFolder(k));
-    sect("Folders", dirs.slice(0, 4)); sect("Files", files.slice(0, 40));
-    $("f-n").textContent = all.length ? `${all.length >= 200 ? "200+" : all.length} found` : F.spotDone ? "" : "…";
-    if (!all.length && F.spotDone) html = `<div class="fnone">Nothing named “${esc(F.q)}”</div>`;
-  }
-  L.innerHTML = html;
-}
-function findMove(d) {
-  if (!F.items.length) return;
-  F.sel = (F.sel + d + F.items.length) % F.items.length;
-  $("f-list").querySelectorAll(".fr").forEach(r => r.classList.toggle("sel", +r.dataset.i === F.sel));
-  $("f-list").querySelector(".fr.sel")?.scrollIntoView({ block: "nearest" });
-}
-// ↵: a folder opens on the map, a photo or video opens in the viewer, anything else is shown on the map with its card.
-// ⌘↵: always just show it on the map.
-async function findGo(k, onMap) {
+const findClose = closeFind, findGone = () => $("find").hidden || $("find").classList.contains("closing");
+// ↵ opens the thing itself: a folder on the map, a photo, video, page or code file in the viewer, anything else in its app.
+// ⌘↵ shows where it is in Finder. ⌥↵ shows it on the map.
+async function findGo(k, mode) {
   closeFind(); recent.add(k);
+  if (mode === "finder") return reveal(k.path);
+  const onMap = mode === "map";
+  if (!onMap && !isFolder(k) && !viewable(k)) return NATIVE ? api("/native/open", { path: k.path }) : reveal(k.path);
   if (focusCat || changedOn) { focusCat = null; focusKinds = new Set(); changedOn = false; drawHeader(); if (current === dirOf(k.path) || isFolder(k)) await open(current, null, "filter"); }
   if (isFolder(k) && !onMap) return open(k.path);
   const parent = dirOf(k.path);
@@ -1302,25 +1158,9 @@ async function findGo(k, onMap) {
   if (!onMap && viewable(item)) return openViewer(item, el);
   if (!el) return toast(`<span>${esc(label(k))} is too small to have its own cartridge here</span><button class="btn small" id="toast-show">Show in Finder</button>`, 6000), ($("toast-show").onclick = () => reveal(k.path));
   el.classList.remove("found"); void el.offsetWidth; el.classList.add("found");
-  if (!onMap && !isFolder(k)) inspect(item, el);
 }
-// ↵ acts on the results for what's typed now; if they're still on their way, it waits for them (up to 3 s)
-async function findEnter(onMap) {
-  const q = $("f-q").value.trim(), gone = () => $("find").hidden || $("find").classList.contains("closing");
-  if (q !== F.q) { clearTimeout(F.t); findRun(); }
-  for (let i = 0; i < 60 && F.drawnQ !== q && !gone(); i++) await wait(50);
-  if (F.drawnQ !== q || gone() || $("f-q").value.trim() !== q) return;
-  const k = F.items[F.sel]; if (k) findGo(k, onMap);
-}
-$("f-q").addEventListener("input", () => { clearTimeout(F.t); F.t = setTimeout(findRun, 70); });
-$("f-q").addEventListener("keydown", e => {
-  if (e.key === "ArrowDown") { e.preventDefault(); findMove(1); }
-  else if (e.key === "ArrowUp") { e.preventDefault(); findMove(-1); }
-  else if (e.key === "Enter") { e.preventDefault(); findEnter(e.metaKey); }
-  else if (e.key === "Escape") { e.preventDefault(); closeFind(); }
-});
-$("f-list").addEventListener("mousemove", e => { const r = e.target.closest(".fr"); if (r && +r.dataset.i !== F.sel) { F.sel = +r.dataset.i; findMove(0); } });
-$("f-list").addEventListener("click", e => { const r = e.target.closest(".fr"); if (r) findGo(F.items[+r.dataset.i], e.metaKey); });
+// the menu-bar panel's ⌥↵: show this on the map (the app brings its window forward first)
+window.rumiShowOnMap = k => { if (status?.ready) findGo(k, "map"); };
 $("find").addEventListener("mousedown", e => { if (e.target === e.currentTarget) closeFind(); });
 $("find-btn").innerHTML = ICON_SEARCH + "Search"; $("find-btn").onclick = openFind;
 
@@ -1360,23 +1200,6 @@ $("kpop").addEventListener("click", e => {
 });
 document.addEventListener("mousedown", e => { if (!$("kpop").hidden && !e.target.closest("#kpop, #chips")) closeKinds(); });
 document.addEventListener("mousedown", e => { if (!$("insp").hidden && !e.target.closest("#insp, #map .b.inspected")) closeInsp(); });
-// details live on hover: anything with data-tip shows a small hint at once (no delay), under it or above if there's no room
-let hintEl = null;
-document.addEventListener("mouseover", e => {
-  const el = e.target.closest?.("[data-tip]"), h = $("hint");
-  if (el === hintEl) return;
-  hintEl = el;
-  if (!el || !el.dataset.tip) { h.hidden = true; return; }
-  h.textContent = el.dataset.tip; h.hidden = false;
-  const r = el.getBoundingClientRect(), w = h.offsetWidth, ht = h.offsetHeight;
-  // menu rows put the hint beside the menu, so it never covers the next row
-  if (el.dataset.tipSide === "right" && r.right + 14 + w < innerWidth - 8) { h.style.left = r.right + 14 + "px"; h.style.top = r.top + r.height / 2 - ht / 2 + "px"; return; }
-  const x = Math.min(Math.max(8, r.width > 240 ? r.left : r.left + r.width / 2 - w / 2), innerWidth - w - 8);
-  const y = r.bottom + 6 + ht > innerHeight - 8 ? r.top - ht - 6 : r.bottom + 6;
-  h.style.left = x + "px"; h.style.top = y + "px";
-});
-const dropHint = () => { $("hint").hidden = true; hintEl = null; };
-["mousedown", "keydown", "wheel"].forEach(t => addEventListener(t, dropHint, { capture: true, passive: true }));
 let toastTimer;
 function toast(html, ms = 6000) {
   const t = $("toast"); t.innerHTML = html; t.classList.remove("out"); t.hidden = false;

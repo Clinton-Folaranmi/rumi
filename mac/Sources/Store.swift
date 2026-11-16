@@ -203,8 +203,10 @@ final class Store {
     var started: Double = 0
     var finished: Double = 0
     var generation = 0
-    /// True while the saved map from last time is being read at launch.
+    /// True while the saved map from last time is being read (at launch, or back in after it was let go).
     var loading = false
+    /// The map was let go to save memory while Rumi sits in the menu bar; the saved file has it. See unload().
+    var unloaded = false
     /// The map on screen came from the saved file and hasn't been refreshed yet this launch.
     var fromSaved = false
     /// Paths the Clean up list currently suggests (Move to Trash allows these even inside an app's data).
@@ -238,7 +240,7 @@ final class Store {
         scanning = true
         generation += 1
         let gen = generation
-        let background = quiet && (root != nil || loading)
+        let background = quiet && (root != nil || loading || unloaded)
         lock.unlock()
         progressLock.lock(); filesSeen = 0; current = ""; progressLock.unlock()
         started = Date().timeIntervalSince1970
@@ -324,9 +326,11 @@ final class Store {
         dupes.status = dupes.groups.isEmpty ? "idle" : "running"
         scanning = false
         fromSaved = false
+        unloaded = false
         finished = now
         lock.unlock()
         withExtendedLifetime(old) {}
+        linkLock.lock(); seenLinks = []; linkLock.unlock()   // only needed while scanning (it can hold hundreds of thousands of entries)
         // a replayed trash changed the tree after it was encoded: save the edited one instead
         if edited { Snapshot.saveSoon() } else { Snapshot.write(saved) }
         NSLog("Rumi: scanned \(filesSeen) files in \(String(format: "%.1f", finished - started)) s")
@@ -364,6 +368,33 @@ final class Store {
         }
         lock.unlock()
         if saved != nil { NSLog("Rumi: opened the saved map in \(String(format: "%.0f", Date().timeIntervalSince(t0) * 1000)) ms") }
+    }
+
+    /// Let the map go: with the window closed and search not in use, Rumi doesn't need 174,000 folders in memory. The saved
+    /// file has them and reads back in about half a second (ensureLoaded). Not while a scan or a duplicate check runs.
+    @discardableResult func unload() -> Bool {
+        lock.lock()
+        guard root != nil, !scanning, !loading, dupes.status != "running" else { lock.unlock(); return false }
+        let old = (root, index, bigFiles, dupes.groups)
+        root = nil; index = [:]; bigFiles = []; dupes.groups = []; dupes.status = "idle"; suggested = []
+        unloaded = true
+        lock.unlock()
+        withExtendedLifetime(old) {}
+        DispatchQueue.global(qos: .utility).async { malloc_zone_pressure_relief(nil, 0) }   // hand the freed pages back now
+        return true
+    }
+
+    /// Read the map back in if it was let go. Returns at once; the status says "loading" until it's there.
+    func ensureLoaded() {
+        lock.lock()
+        guard root == nil, unloaded, !loading, !scanning else { lock.unlock(); return }
+        loading = true
+        lock.unlock()
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            loadSaved()
+            lock.lock(); let none = root == nil; if !none { unloaded = false }; lock.unlock()
+            if none { startScan() }   // the saved file is gone or unreadable: scan
+        }
     }
 
     struct Work { let dir: Dir; let path: String; let ctx: Int?; let dev: dev_t }

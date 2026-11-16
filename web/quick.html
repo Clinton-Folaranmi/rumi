@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rumi search</title>
+<script>document.documentElement.dataset.style = "cartridge";</script>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<!-- The menu-bar search panel: the same search as ⌘F in the app, shown over whatever you're doing.
+     ↵ opens the thing itself, ⌘↵ shows it in Finder, ⌥↵ shows it on Rumi's map. -->
+<body class="quick">
+<div class="fbox">
+  <div class="fin"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><input id="f-q" placeholder="Search files and folders" spellcheck="false" autocomplete="off"><span id="f-n" class="num"></span></div>
+  <div class="flist" id="f-list"></div>
+  <div class="ffoot"><span><kbd>↵</kbd> open</span><span><kbd>⌘↵</kbd> show in Finder</span><span><kbd>⌥↵</kbd> show in Rumi</span><span><kbd>esc</kbd> close</span></div>
+</div>
+<div class="tip" id="tip" hidden></div>
+<div class="hint" id="hint" hidden></div>
+
+<script src="/base.js"></script>
+<script src="/find.js"></script>
+<script>
+const findClose = () => NATIVE?.postMessage({ path: "/native/quick-close", body: {} }).catch(() => {});
+async function findGo(k, mode) {
+  recent.add(k);
+  if (mode === "finder") await api("/api/reveal", { path: k.path }).catch(() => {});
+  else if (mode === "map") await api("/native/show-in-rumi", { item: { path: k.path, name: k.name, size: k.size, type: k.type, cat: k.cat, pkg: !!k.pkg } }).catch(() => {});
+  else await api("/native/open", { path: k.path }).catch(() => {});
+  findClose();
+}
+// called by the app each time the panel opens: what you typed last is still there, selected, so typing replaces it
+window.focusQuick = async () => {
+  if (!HOME) { const s = await api("/api/status").catch(() => null); if (s) HOME = s.home; }
+  const i = $("f-q"); i.focus(); i.select(); findRun();
+  // the map of the disk may have been let go while Rumi sat in the menu bar: it's read back in about half a second, and
+  // the results are drawn again with folders and sizes once it's in
+  for (let n = 0; n < 40; n++) {
+    const s = await api("/api/status").catch(() => null);
+    if (!s || s.ready) { if (n) findRun(); break; }
+    await wait(150);
+  }
+};
+addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); findClose(); } });
+focusQuick();
+</script>
+</body>
+</html>

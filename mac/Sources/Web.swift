@@ -63,7 +63,8 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
         }
 
         // static files
-        let pages = ["/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.css": "app.css", "/rumi.js": "rumi.js", "/design-system": "design-system.html"]
+        let pages = ["/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.css": "app.css", "/rumi.js": "rumi.js",
+                     "/base.js": "base.js", "/find.js": "find.js", "/quick": "quick.html", "/design-system": "design-system.html"]
         if let file = pages[path] ?? (path.hasPrefix("/fonts/") && !path.contains("..") ? String(path.dropFirst()) : nil) {
             let f = webRoot.appendingPathComponent(file)
             guard let data = try? Data(contentsOf: f) else { return reply(404, Data(), "text/plain") }
@@ -145,8 +146,8 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             let paths = body["paths"] as? [String] ?? []
             DispatchQueue.global(qos: .userInitiated).async { done(trashJSON(paths)) }
         case "/api/reveal":
-            let p = body["path"] as? String ?? ""
-            if FileManager.default.fileExists(atPath: p) { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) }
+            // in a new Finder window on the screen this was asked from (the panel's, or the main window's)
+            showInFinder(body["path"] as? String ?? "", select: true, on: message.webView?.window?.screen)
             done(["ok": true])
         case "/api/put-back":
             let items = (body["items"] as? [[String: Any]] ?? []).map { $0.compactMapValues { $0 as? String } }
@@ -190,8 +191,63 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             ContextMenu.show(body["items"] as? [[String: Any]] ?? [], in: v) { done(["chosen": $0 ?? NSNull()]) }
         case "/native/open":
             let p = body["path"] as? String ?? ""
-            if let p = pathInRoots(p) { NSWorkspace.shared.open(URL(fileURLWithPath: p)) }
+            if let p = pathInRoots(p) {
+                let v = try? URL(fileURLWithPath: p).resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+                if v?.isDirectory == true && v?.isPackage != true { showInFinder(p, select: false, on: message.webView?.window?.screen) }   // a folder: a Finder window here
+                else { NSWorkspace.shared.open(URL(fileURLWithPath: p)) }
+            }
             done(["ok": true])
+        case "/native/quick-close":   // the menu-bar search panel: Esc, or a result was opened
+            QuickSearch.shared.hide(); done(["ok": true])
+        case "/native/show-in-rumi":   // the panel's ⌥↵: bring the main window forward and show this on the map
+            QuickSearch.shared.hide()
+            (NSApp.delegate as? AppDelegate)?.showOnMap(body["item"] as? [String: Any] ?? [:])
+            done(["ok": true])
+        case "/native/mem" where CommandLine.arguments.contains("--snapshot"):   // test runs: what Rumi holds right now
+            DispatchQueue.global().async { done(Mem.snapshot(getpid())) }
+        case "/native/test-window" where CommandLine.arguments.contains("--snapshot"):   // test runs: close or reopen the main window
+            if body["show"] as? Bool == true { NSApp.windows.first { !($0 is NSPanel) }?.orderFront(nil) } else { NSApp.windows.first { !($0 is NSPanel) }?.orderOut(nil) }
+            done(["ok": true])
+        case "/native/test-finder" where CommandLine.arguments.contains("--snapshot"):   // test runs: where a Show in Finder window is asked to go
+            done(["rect": showInFinder(body["path"] as? String ?? "", select: true, on: NSScreen.main)])
+        case "/native/test-unload" where CommandLine.arguments.contains("--snapshot"):
+            // test runs: let the map's page go as a closed window would, then print what Rumi holds once that has settled
+            guard let d = NSApp.delegate as? AppDelegate else { return done(["ok": false]) }
+            d.holdUntil = Date().addingTimeInterval(24)
+            done(["ok": true])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { d.window.orderOut(nil); d.unloadPage() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {   // then what the idle check does after a while
+                QuickSearch.shared.releasePanel()
+                for _ in 0..<40 where !Store.shared.unload() { Thread.sleep(forTimeInterval: 0.1) }
+                print("map let go:", Store.shared.root == nil); fflush(stdout)
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
+                let m = Mem.snapshot(getpid())
+                print("after the page is let go:", Int((m["totalMB"] as? Double ?? 0).rounded()), "MB ·", (m["parts"] as? [[String: Any]] ?? []).map { "\($0["name"] as? String ?? "") \($0["mb"] ?? 0)" }.joined(separator: " · "))
+                fflush(stdout)
+                // then ask for something on the map, as the search panel's ⌥↵ does: the window's page has to come back first
+                let t0 = Date(); Store.shared.ensureLoaded()
+                while Store.shared.root == nil && Date().timeIntervalSince(t0) < 20 { Thread.sleep(forTimeInterval: 0.02) }
+                print(String(format: "map read back in %.2f s", Date().timeIntervalSince(t0))); fflush(stdout)
+                DispatchQueue.main.async {
+                    d.showOnMap(["path": HOME + "/Downloads", "name": "Downloads", "type": "dir", "cat": "other", "size": 1, "pkg": false])
+                    d.window.setFrameOrigin(NSPoint(x: -6000, y: 0))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                        d.web?.evaluateJavaScript("JSON.stringify({ cartridges: document.querySelectorAll('#map .b').length, atHome: current === HOME, flashed: !!document.querySelector('#map .b.found') })") { r, _ in
+                            print("after coming back:", r ?? "no page"); fflush(stdout)
+                        }
+                    }
+                }
+            }
+        case "/native/test-timing" where CommandLine.arguments.contains("--snapshot"):   // test runs: time search and the window coming back
+            guard let d = NSApp.delegate as? AppDelegate else { return done(["ok": false]) }
+            d.holdUntil = Date().addingTimeInterval(120)
+            done(["ok": true])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { d.runTiming() }
+        case "/native/quick-live" where CommandLine.arguments.contains("--snapshot"):
+            QuickSearch.shared.liveTest(done: done)
+        case "/native/quick-test" where CommandLine.arguments.contains("--snapshot"):
+            QuickSearch.shared.test(query: body["q"] as? String ?? "", out: body["out"] as? String ?? "/tmp/rumi-quick.png", done: done)
         case "/native/ping":   // the --snapshot self-check: the bridge answers
             done(["ok": true])
         default:

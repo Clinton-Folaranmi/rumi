@@ -225,7 +225,7 @@ aside { border-left: 1px solid var(--line); background: var(--panel); display: g
 .tip .s { font-size: 20px; font-weight: 680; letter-spacing: -.02em; line-height: 1.15; }
 .tip .p { grid-column: 1 / 3; margin-top: 8px; color: var(--faint); word-break: break-all; }
 .tip .k { grid-column: 1 / 3; color: var(--dim); }
-.insp { position: fixed; z-index: 35; width: 300px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
+.insp { position: fixed; z-index: 35; width: 336px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
 .insp[hidden] { display: none; }
 .insp .ih { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; }
 .insp .ih .tile { width: 48px; height: 48px; border-radius: 10px; }
@@ -235,8 +235,9 @@ aside { border-left: 1px solid var(--line); background: var(--panel); display: g
 .insp .x:hover { background: var(--hover); color: var(--ink); }
 .insp .m { margin-top: 12px; color: var(--dim); font-size: 12px; }
 .insp .p { margin-top: 4px; color: var(--faint); font-size: 11.5px; word-break: break-all; }
-.insp .a { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
-.insp .a .btn { justify-content: center; white-space: nowrap; font-size: 12.5px; }
+/* the two buttons are equal halves that end at the card's padding; one that says more than its half takes what it needs */
+.insp .a { display: flex; gap: 8px; margin-top: 14px; }
+.insp .a .btn { flex: 1 1 0; min-width: max-content; justify-content: center; white-space: nowrap; font-size: 12.5px; }
 .welcome { background: var(--panel); border-radius: 24px; padding: 34px 36px 28px; width: min(500px, 92vw); box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0,0,0,.14); }
 .welcome .shelf { display: flex; gap: 8px; align-items: flex-end; height: 64px; margin-bottom: 22px; padding-bottom: 4px; box-shadow: inset 0 -3px 0 var(--line2); }
 .welcome .shelf i { width: 40px; height: 54px; border-radius: 7px 7px 3px 3px; position: relative; background: var(--c); box-shadow: inset 0 -2px 0 rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.4); }
@@ -257,23 +258,30 @@ aside { border-left: 1px solid var(--line); background: var(--panel); display: g
   box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0,0,0,.18); padding: 8px; display: flex; flex-direction: column; max-height: calc(100vh - 150px); }
 .fin { display: flex; align-items: center; gap: 12px; padding: 10px 12px 12px; border-bottom: 1px solid var(--line); }
 .fin svg.i { width: 19px; height: 19px; color: var(--dim); }
-.find .fin input { flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; border: 0 !important; outline: none !important; box-shadow: none !important; background: none !important; padding: 0 !important; border-radius: 0;
+.find .fin input, body.quick .fin input { flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; border: 0 !important; outline: none !important; box-shadow: none !important; background: none !important; padding: 0 !important; border-radius: 0;
   font-family: inherit; font-size: 19px; font-weight: 500; line-height: 1.3; color: var(--ink); letter-spacing: -.01em; }
 .fin input::placeholder { color: var(--faint); }
 .fin span { font-size: 12px; color: var(--faint); white-space: nowrap; }
 .flist { overflow: auto; padding: 4px 0; min-height: 60px; }
 .fh { color: var(--faint); font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; padding: 10px 10px 4px; }
-.fr { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 9px; cursor: default; }
-.fr.sel { background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.fr { display: grid; grid-template-columns: 30px 1fr auto 26px; gap: 10px; align-items: center; padding: 6px 8px 6px 10px; border-radius: 9px; cursor: default; }
+/* the row you're on (pointer or arrow keys) is a neutral grey: pink is only for what you've picked to remove */
+.fr.sel { background: rgba(24,24,27,.065); }
+.fr .ffind { width: 26px; height: 26px; border: 0; border-radius: 7px; background: none; padding: 0; display: grid; place-items: center; color: var(--faint); }
+.fr.sel .ffind { color: var(--dim); }
+.fr .ffind:hover { background: #fff; color: var(--ink); box-shadow: 0 0 0 1px var(--line2); }
 .fr .tile { width: 30px; height: 30px; border-radius: 7px; font-size: 8px; }
 .fr .fm { min-width: 0; }
-.fr b { font-weight: 600; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fr b { font-weight: 600; display: block; width: fit-content; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fr mark { background: color-mix(in srgb, var(--c-image) 40%, transparent); color: inherit; border-radius: 3px; }
 .fr small { display: block; color: var(--faint); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
 .fr > .num { font-weight: 650; font-size: 12.5px; }
 .fnone { padding: 26px 10px; text-align: center; color: var(--dim); }
-.ffoot { display: flex; gap: 16px; color: var(--faint); font-size: 11.5px; padding: 9px 10px 3px; border-top: 1px solid var(--line); }
-.ffoot kbd { font: 11px -apple-system, sans-serif; border: 1px solid var(--line2); border-radius: 5px; padding: 0 5px; margin-right: 3px; }
+/* the keys row: even space above and below, each key a box of one height with its sign centred */
+.ffoot { display: flex; align-items: center; gap: 18px; color: var(--dim); font-size: 11.5px; line-height: 1; padding: 10px 12px 4px; border-top: 1px solid var(--line); }
+.ffoot span { display: inline-flex; align-items: center; gap: 7px; }
+.ffoot kbd { display: inline-grid; place-items: center; height: 20px; min-width: 24px; padding: 0 6px; box-sizing: border-box; font: 500 11px/1 -apple-system, sans-serif; color: var(--dim);
+  background: #fff; border: 0; border-radius: 5px; box-shadow: 0 0 0 1px var(--line2); }
 .kpop { position: fixed; z-index: 24; width: 252px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-pop); padding: 6px;
   transform-origin: 24px 0; animation: kpop-in .16s var(--ease-out); }
 .kpop[hidden] { display: none; }

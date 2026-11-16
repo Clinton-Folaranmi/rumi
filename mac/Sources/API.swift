@@ -504,6 +504,34 @@ func osascript(_ lines: [String], args: [String] = []) -> (Bool, String, String)
             (String(data: o, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
 }
 
+/// Show a file in Finder, selected in its folder (or open a folder), in a NEW Finder window on the given screen.
+/// Asking Finder to "reveal" reuses a window that may be on another screen or desktop and takes you there; a new window
+/// placed here doesn't. Falls back to the plain reveal if Finder can't be scripted.
+@discardableResult
+func showInFinder(_ path: String, select: Bool, on screen: NSScreen?) -> [Int] {
+    guard FileManager.default.fileExists(atPath: path) else { return [] }
+    let scr = screen ?? NSScreen.main ?? NSScreen.screens.first
+    let vis = scr?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let primaryH = NSScreen.screens.first?.frame.height ?? vis.maxY   // Finder counts down from the top of the main display
+    let w = min(960, vis.width - 80), h = min(620, vis.height - 80)
+    let left = Int(vis.midX - w / 2), top = Int(primaryH - (vis.midY + h / 2))
+    DispatchQueue.global(qos: .userInitiated).async {
+        let (ok, _, _) = osascript([
+            "on run argv", "set p to item 1 of argv",
+            "set b to {(item 3 of argv) as integer, (item 4 of argv) as integer, (item 5 of argv) as integer, (item 6 of argv) as integer}",
+            "tell application \"Finder\"", "set f to (POSIX file p) as alias",
+            "if (item 2 of argv) is \"1\" then", "set w to make new Finder window to (container of f)", "else", "set w to make new Finder window to f", "end if",
+            "set bounds of w to b", "if (item 2 of argv) is \"1\" then select f", "activate", "end tell", "end run",
+        ], args: [path, select ? "1" : "0", String(left), String(top), String(left + Int(w)), String(top + Int(h))])
+        if !ok {
+            DispatchQueue.main.async {
+                if select { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) } else { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
+            }
+        }
+    }
+    return [left, top, left + Int(w), top + Int(h)]
+}
+
 /// Finder does the deleting so "Put Back" works; if Finder refuses, fall back to the Trash API.
 /// Returns where the item landed in the Trash, so Rumi can undo. A link is never followed.
 func moveToTrash(_ p: String) -> (Bool, String, String?) {

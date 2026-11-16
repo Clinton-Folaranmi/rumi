@@ -17,11 +17,11 @@ enum Access {
         return !sawDenied
     }
 
-    static func refresh() {
+    static func refresh(scan: Bool = true) {
         let S = Store.shared
         if S.access == "needed", granted() || UserDefaults.standard.bool(forKey: "skippedFullDiskAccess") {
             S.access = granted() ? "granted" : "skipped"
-            S.startScan(quiet: true)
+            if scan { S.startScan(quiet: true) }
         }
     }
 
@@ -36,15 +36,17 @@ enum Access {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate {
     var window: NSWindow!
-    var web: WKWebView!
+    /// The main window's web view. nil while the window is closed and its page has been let go.
+    var web: WKWebView?
     let scheme = SchemeHandler()
     let bridge = Bridge()
     let paper = NSColor(srgbRed: 0xfb / 255.0, green: 0xfb / 255.0, blue: 0xfa / 255.0, alpha: 1)
 
-    func applicationDidFinishLaunching(_ note: Notification) {
-        buildMenus()
+    /// A web view configuration for the app's own pages: the rumi:// scheme, the action bridge and this launch's token.
+    /// The main window and the menu-bar search panel each get one.
+    func makeConfig() -> WKWebViewConfiguration {
         let cfg = WKWebViewConfiguration()
         cfg.setURLSchemeHandler(scheme, forURLScheme: "rumi")
         cfg.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "rumi")
@@ -54,12 +56,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         // inside a web page shown in the viewer, Esc still closes the viewer (the page can't do anything else with this)
         let frames = "if (window !== top) addEventListener('keydown', e => { if (e.key === 'Escape') parent.postMessage({ rumiKey: 'Escape' }, '*'); }, true);"
         cfg.userContentController.addUserScript(WKUserScript(source: frames, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        return cfg
+    }
 
-        web = RumiWebView(frame: NSRect(x: 0, y: 0, width: 1440, height: 900), configuration: cfg)
-        web.isInspectable = DEV_MODE
-        web.navigationDelegate = self
-        web.uiDelegate = self
-        web.underPageBackgroundColor = paper
+    /// The main window's web view.
+    func makeWebView() -> WKWebView {
+        let v = RumiWebView(frame: NSRect(x: 0, y: 0, width: 1440, height: 900), configuration: makeConfig())
+        v.isInspectable = DEV_MODE
+        v.navigationDelegate = self
+        v.uiDelegate = self
+        v.underPageBackgroundColor = paper
+        return v
+    }
+
+    func applicationDidFinishLaunching(_ note: Notification) {
+        buildMenus()
+        // started by macOS at login: stay in the menu bar, with no window, no page and no map in memory until one is asked for
+        let ev = NSAppleEventManager.shared().currentAppleEvent
+        let atLogin = ev?.eventID == AEEventID(kAEOpenApplication) && ev?.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue == OSType(keyAELaunchedAsLogInItem)
+        if !atLogin { web = makeWebView() }
 
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -69,8 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.backgroundColor = paper
         window.appearance = NSAppearance(named: .aqua)
         window.minSize = NSSize(width: 1040, height: 680)
-        window.contentView = web
+        window.contentView = web ?? NSView()
         window.isReleasedWhenClosed = false
+        window.delegate = self
         let testRun = CommandLine.arguments.contains("--snapshot")
         if !testRun {   // test renders happen off-screen and must not save that position
             if !window.setFrameUsingName("RumiMain") { window.center() }
@@ -79,8 +95,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             if !visible { window.center() }
             window.setFrameAutosaveName("RumiMain")
         }
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        if !atLogin {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        pageLoaded = !atLogin
+        if !testRun {   // every 20 s: with the window closed and search unused for a while, let memory go
+            Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.idleTick() }
+        }
+        // search from anywhere: the menu-bar cartridge and its shortcut (not in test runs, which would add a second cartridge)
+        QuickSearch.shared.makeConfig = { [unowned self] in self.makeConfig() }
+        QuickSearch.shared.showMain = { [unowned self] in self.showMainWindow() }
+        if !testRun { QuickSearch.shared.install(); QuickSearch.shared.registerShortcut() }
 
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot") {
             // test mode: render off-screen, save a PNG of the window, report a few checks, quit
@@ -91,15 +117,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             window.setFrameOrigin(NSPoint(x: -6000, y: 0))
             let out = CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : "/tmp/rumi.png"
             let page = CommandLine.arguments.count > i + 2 ? CommandLine.arguments[i + 2] : "index.html"
-            web.load(URLRequest(url: URL(string: "rumi://app/" + page)!))
+            web?.load(URLRequest(url: URL(string: "rumi://app/" + page)!))
             snapshot(to: out, tries: 0)
             return
         }
-        // last launch's map opens right away; the scan Access.refresh starts then refreshes it quietly
-        Store.shared.loading = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
-        DispatchQueue.global(qos: .userInteractive).async { Store.shared.loadSaved() }
-        Access.refresh()
-        web.load(URLRequest(url: URL(string: "rumi://app/index.html")!))
+        if atLogin {
+            // nothing is on screen: the saved map stays on disk, and the quiet rescan waits three minutes for login to settle
+            Store.shared.unloaded = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
+            Access.refresh(scan: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 180) { if Store.shared.access != "needed" { Store.shared.startScan(quiet: true) } }
+        } else {
+            // last launch's map opens right away; the scan Access.refresh starts then refreshes it quietly
+            Store.shared.loading = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
+            DispatchQueue.global(qos: .userInteractive).async { Store.shared.loadSaved() }
+            Access.refresh()
+            web?.load(URLRequest(url: URL(string: "rumi://app/index.html")!))
+        }
         DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 30) { Viewer.prune() }
     }
 
@@ -108,10 +141,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private func afterRefresh(tries: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
             let probe = "(() => ({ refreshing: !!(status && status.refreshing), button: document.getElementById('rescan-l').textContent, tip: document.getElementById('rescan').title, blocks: document.querySelectorAll('#map .b').length, scanningScreen: !document.getElementById('scanning').hidden }))()"
+            guard let web = self.web else {   // the page was let go by a test: wait out the hold, then quit
+                if Date() < self.holdUntil && tries < 600 { return self.afterRefresh(tries: tries + 1) }
+                return NSApp.terminate(nil)
+            }
             web.evaluateJavaScript(probe) { res, _ in
                 let r = res as? [String: Any] ?? [:]
                 if tries == 0 { print("while updating:", r) }
-                if (r["refreshing"] as? Bool ?? false) && tries < 600 { return self.afterRefresh(tries: tries + 1) }
+                if ((r["refreshing"] as? Bool ?? false) || Date() < self.holdUntil) && tries < 600 { return self.afterRefresh(tries: tries + 1) }
                 print(String(format: "after update (%.1f s):", Date().timeIntervalSince(self.launchedAt)), r)
                 NSApp.terminate(nil)
             }
@@ -121,22 +158,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private func snapshot(to out: String, tries: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [self] in
             let probe = "(() => ({ blocks: document.querySelectorAll('#map .b').length, scanning: !document.getElementById('scanning').hidden, rows: document.querySelectorAll('.row').length }))()"
-            web.evaluateJavaScript(probe) { res, _ in
+            web?.evaluateJavaScript(probe) { res, _ in
                 let r = res as? [String: Any] ?? [:]
                 let ready = (r["blocks"] as? Int ?? 0) > 0 && !(r["scanning"] as? Bool ?? true)
                 if !ready && tries < 480 { return self.snapshot(to: out, tries: tries + 1) }
                 print(String(format: "first map on screen after %.2f s", Date().timeIntervalSince(self.launchedAt)))
-                self.web.evaluateJavaScript("JSON.stringify(performance.getEntriesByType('mark').map(m => [m.name, Math.round(m.startTime)]).concat([['nav', Math.round(performance.timeOrigin - \(self.launchedAt.timeIntervalSince1970 * 1000))]]))") { m, _ in print("page marks (ms):", m ?? "") }
+                self.web?.evaluateJavaScript("JSON.stringify(performance.getEntriesByType('mark').map(m => [m.name, Math.round(m.startTime)]).concat([['nav', Math.round(performance.timeOrigin - \(self.launchedAt.timeIntervalSince1970 * 1000))]]))") { m, _ in print("page marks (ms):", m ?? "") }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    self.web.callAsyncJavaScript("return await NATIVE.postMessage({ path: '/native/ping', body: {} })", in: nil, in: .page) { bridge in
+                    self.web?.callAsyncJavaScript("return await NATIVE.postMessage({ path: '/native/ping', body: {} })", in: nil, in: .page) { bridge in
                         print("probe:", r, "bridge:", (try? bridge.get()) ?? "failed")
                         let ql = QuickLook.shared.handle(["/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns"], mode: "toggle")
                         print("quick look opens:", ql, "· closes:", !QuickLook.shared.handle([], mode: "close"))
                         // RUMI_EVAL: run a test script in the page first (it may await), print what it returns
                         let js = ProcessInfo.processInfo.environment["RUMI_EVAL"] ?? "return null"
-                        self.web.callAsyncJavaScript(js, in: nil, in: .page) { res in
+                        self.web?.callAsyncJavaScript(js, in: nil, in: .page) { res in
                         if ProcessInfo.processInfo.environment["RUMI_EVAL"] != nil { print("eval:", (try? res.get()) ?? "failed: \(res)") }
-                        self.web.takeSnapshot(with: nil) { img, _ in
+                        self.web?.takeSnapshot(with: nil) { img, _ in
                             if let img, let tiff = img.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
                                 try? png.write(to: URL(fileURLWithPath: out)); print("snapshot:", out)
                             }
@@ -150,7 +187,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     func applicationDidBecomeActive(_ note: Notification) { Access.refresh() }
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    // Closing the window leaves Rumi in the menu bar, so search stays one click away. ⌘Q (or the cartridge's menu) quits.
+    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { false }
+    func applicationShouldHandleReopen(_ app: NSApplication, hasVisibleWindows flag: Bool) -> Bool { if !flag { showMainWindow() }; return true }
+
+    // While its window is closed Rumi only needs to answer searches, so the map's page is let go a minute after the window
+    // closes (about 100 to 200 MB back) and loaded again when the window returns. The map of the disk itself stays in memory.
+    var pageLoaded = true
+    private var unloadTimer: DispatchWorkItem?
+    func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === window, !CommandLine.arguments.contains("--snapshot") else { return }
+        unloadTimer?.cancel()
+        let t = DispatchWorkItem { [weak self] in if self?.window.isVisible == false { self?.unloadPage() } }
+        unloadTimer = t
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60, execute: t)
+    }
+    /// With the window closed and its page gone, Rumi only answers searches. Once search has been unused for a while its
+    /// panel goes too (2 minutes), and so does the map of the disk (45 seconds); both come back when they're asked for.
+    func idleTick() {
+        let Q = QuickSearch.shared
+        guard web == nil, !window.isVisible, !Q.isOpen else { return }
+        let quiet = Date().timeIntervalSince(Q.lastUsed)
+        if quiet > 120 { Q.releasePanel() }
+        if quiet > 45 { Store.shared.unload() }
+    }
+
+    func unloadPage() {
+        guard pageLoaded else { return }
+        pageLoaded = false
+        Store.shared.viewerOpen = false
+        // the web view itself goes: only that ends its helper process and frees the memory (a blank page stays cached)
+        window.contentView = NSView()
+        web = nil
+    }
+
+    @objc func showMainWindow() {
+        unloadTimer?.cancel()
+        Store.shared.ensureLoaded()
+        if web == nil { web = makeWebView(); window.contentView = web; pageLoaded = false }
+        if !pageLoaded { pageLoaded = true; web?.load(URLRequest(url: URL(string: "rumi://app/index.html")!)) }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Test runs only (--snapshot): how long search and the window take to come back when they were kept in memory, and
+    /// when they had been let go. Prints one line per case.
+    func runTiming() {
+        let Q = QuickSearch.shared
+        func say(_ s: String) { print(s); fflush(stdout) }
+        func after(_ s: Double, _ f: @escaping () -> Void) { DispatchQueue.main.asyncAfter(deadline: .now() + s, execute: f) }
+        func dropMap() { for _ in 0..<50 where !Store.shared.unload() { Thread.sleep(forTimeInterval: 0.1) } }
+        // the window: from asking for it until the map is drawn
+        func reopen(_ label: String, then: @escaping () -> Void) {
+            let t0 = Date()
+            showMainWindow()
+            window.setFrameOrigin(NSPoint(x: -6000, y: 0))
+            func poll() {
+                web?.evaluateJavaScript("typeof status === 'object' && !!status && !!status.ready && document.querySelectorAll('#map .b').length > 0 && document.getElementById('scanning').hidden") { r, _ in
+                    let ms = Int(Date().timeIntervalSince(t0) * 1000)
+                    if r as? Bool == true || ms > 20000 { say("timing · \(label): \(ms) ms"); return then() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { poll() }
+                }
+            }
+            poll()
+        }
+        Q.timeOpen { first in say("timing · search, first ever open: \(first)")
+        after(2) { Q.timeOpen { r in say("timing · search, all kept: \(r)")
+        after(1) { dropMap(); say("map let go: \(Store.shared.root == nil)")
+        after(2) { Q.timeOpen { r in say("timing · search, map let go: \(r)")
+        after(1) { Q.releasePanel(); dropMap()
+        after(3) { Q.timeOpen { r in say("timing · search, panel and map let go: \(r)")
+        after(1) { self.window.orderOut(nil)
+        after(1) { reopen("window, all kept") {
+        after(2) { self.window.orderOut(nil); self.unloadPage()
+        after(3) { reopen("window, page let go") {
+        after(2) { self.window.orderOut(nil); self.unloadPage(); Q.releasePanel(); dropMap(); say("map let go: \(Store.shared.root == nil)")
+        after(3) { reopen("window, page and map let go") {
+            self.holdUntil = Date()
+        } } } } } } } } } } } } } } } } } }
+    }
+
+    /// From the menu-bar panel: show something on the map (once the page is up, if it had to be loaded again).
+    func showOnMap(_ item: [String: Any], tries: Int = 0) {
+        if tries == 0 { showMainWindow() }
+        let json = String(data: jsonData(item), encoding: .utf8) ?? "{}"
+        web?.evaluateJavaScript("(() => { if (!(window.rumiShowOnMap && typeof status === 'object' && status && status.ready && document.querySelector('#map .b'))) return false; rumiShowOnMap(\(json)); return true; })()") { ok, _ in
+            if ok as? Bool != true, tries < 25 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.showOnMap(item, tries: tries + 1) } }
+        }
+    }
+
+    /// Test runs: don't quit before this time (a test that lets the page go needs the app to outlive it).
+    var holdUntil = Date.distantPast
 
     // The window stays on rumi://app. A web page in the viewer (a sealed frame) may load its own folder over rumi://files
     // and its embeds (video players, maps) over the web; a link clicked in it opens in your browser, if it's a web or mail link.
@@ -191,12 +318,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     // MARK: menus
 
-    @objc func rescan() { web.evaluateJavaScript("document.getElementById('rescan').click()") }
-    @objc func reloadPage() { web.reload() }
-    @objc func goBack() { web.evaluateJavaScript("goBack()") }
-    @objc func goForward() { web.evaluateJavaScript("goForward()") }
-    @objc func goUp() { web.evaluateJavaScript("goUp()") }
-    @objc func showAccess() { web.evaluateJavaScript("showAccess()") }
+    @objc func rescan() { web?.evaluateJavaScript("document.getElementById('rescan').click()") }
+    @objc func reloadPage() { web?.reload() }
+    @objc func goBack() { web?.evaluateJavaScript("goBack()") }
+    @objc func goForward() { web?.evaluateJavaScript("goForward()") }
+    @objc func goUp() { web?.evaluateJavaScript("goUp()") }
+    @objc func showAccess() { showMainWindow(); web?.evaluateJavaScript("window.showAccess && showAccess()") }
 
     private func buildMenus() {
         let main = NSMenu()
@@ -235,6 +362,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             item("Enclosing Folder", #selector(goUp), String(UnicodeScalar(NSUpArrowFunctionKey)!), target: self),
         ])
         let win = sub("Window", [
+            item("Rumi", #selector(showMainWindow), "0", target: self),
+            .separator(),
             item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
             item("Zoom", #selector(NSWindow.performZoom(_:)), ""),
             .separator(),
@@ -280,6 +409,21 @@ if CommandLine.arguments.contains("--hidden") {
     print(String(format: "measured in %.1f s · disk %@", Date().timeIntervalSince(t0), diskInfo().description))
     for row in r["rows"] as? [[String: Any]] ?? [] { print(String(format: "  %-42@ %6.2f GB  %@", row["title"] as? String ?? "", Double(row["size"] as? Int64 ?? 0) / 1e9, row["warn"] as? String ?? "")) }
     print("  snapshots:", r["snapshots"] ?? 0, r["newestSnapshot"] ?? "")
+    exit(0)
+}
+
+// `Rumi --login on|off|status`: start Rumi when you log in (the same switch as Start at Login in the cartridge's menu).
+if let i = CommandLine.arguments.firstIndex(of: "--login") {
+    let want = CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : "status"
+    if want == "on" || want == "off", let why = QuickSearch.setStartsAtLogin(want == "on") { print("couldn't change it:", why) }
+    print("starts at login:", QuickSearch.startsAtLogin ? "yes" : "no")
+    exit(0)
+}
+
+// `Rumi --mem <pid> [seconds]`: how much memory a running Rumi and its web helpers hold, and how much processor time they use
+// while you watch for a while. See Mem.swift.
+if let i = CommandLine.arguments.firstIndex(of: "--mem"), CommandLine.arguments.count > i + 1, let pid = pid_t(CommandLine.arguments[i + 1]) {
+    Mem.report(pid, watch: CommandLine.arguments.count > i + 2 ? Double(CommandLine.arguments[i + 2]) ?? 0 : 0)
     exit(0)
 }
 

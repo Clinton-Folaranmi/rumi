@@ -506,7 +506,7 @@ main, header { min-width: 0; }
 .b.locked .lbl .hl .more { border-top: 0; color: var(--faint); font-weight: 600; padding-top: 8px; }
 
 /* ---------- copy pass (Nov 11): less on screen, details on hover ---------- */
-.hint { position: fixed; z-index: 60; pointer-events: none; max-width: 280px; padding: 6px 9px; border-radius: 8px; background: #1b1a18; color: #f1efea;
+.hint { position: fixed; z-index: 60; pointer-events: none; max-width: min(340px, calc(100vw - 16px)); overflow-wrap: anywhere; padding: 6px 9px; border-radius: 8px; background: #1b1a18; color: #f1efea;
   font-size: 12px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
 .hint[hidden] { display: none; }
 @media (prefers-color-scheme: dark) { .hint { background: #f1efea; color: #1b1a18; } }
@@ -629,3 +629,12 @@ main, header { min-width: 0; }
 
 /* macOS keeps this: graphite, so it can't be read as a folder */
 [data-style="cartridge"] .b.locked .bigsz { color: #eceae5; text-shadow: none; }
+
+/* ==========================================================================
+   Search from anywhere (Nov 16): the menu-bar panel. The same search box, filling its own small window.
+   ========================================================================== */
+body.quick { display: block; background: var(--panel); overflow: hidden; }
+body.quick .fbox { position: static; transform: none; width: 100%; height: 100vh; max-height: none; border-radius: 0; box-shadow: none; }
+body.quick .flist { flex: 1; }
+body.quick .ffoot { padding-bottom: 2px; }
+.ffoot { white-space: nowrap; overflow: hidden; flex-shrink: 0; }

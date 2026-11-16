@@ -104,7 +104,7 @@ final class QuickLook: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
         if event.type == .keyDown, event.keyCode == 49 || event.keyCode == 53 {
             panel.orderOut(nil)
-            (NSApp.delegate as? AppDelegate)?.web.evaluateJavaScript("qlOpen = false")
+            (NSApp.delegate as? AppDelegate)?.web?.evaluateJavaScript("qlOpen = false")
             return true
         }
         return false

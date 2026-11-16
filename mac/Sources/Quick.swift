@@ -143,7 +143,7 @@ final class QuickSearch: NSObject, NSWindowDelegate, WKNavigationDelegate {
         web.evaluateJavaScript("window.focusQuick && focusQuick()")
         // a map that's hours old gets a quiet rescan, so sizes and big files in the results are current
         let S = Store.shared
-        if !S.scanning, S.finished > 0, Date().timeIntervalSince1970 - S.finished > 6 * 3600 { S.startScan(quiet: true) }
+        if !S.scanning, S.access != "needed", S.finished > 0, Date().timeIntervalSince1970 - S.finished > 6 * 3600 { S.startScan(quiet: true) }
     }
 
     private func build() {
@@ -163,7 +163,7 @@ final class QuickSearch: NSObject, NSWindowDelegate, WKNavigationDelegate {
         box.wantsLayer = true
         box.layer?.cornerRadius = 16
         box.layer?.masksToBounds = true
-        box.layer?.backgroundColor = NSColor(srgbRed: 0xfb / 255.0, green: 0xfb / 255.0, blue: 0xfa / 255.0, alpha: 1).cgColor
+        box.layer?.backgroundColor = PAPER.cgColor
         let wv = WKWebView(frame: box.bounds, configuration: cfg)
         wv.autoresizingMask = [.width, .height]
         wv.isInspectable = DEV_MODE
@@ -247,9 +247,7 @@ final class QuickSearch: NSObject, NSWindowDelegate, WKNavigationDelegate {
             web.callAsyncJavaScript("const q = \(q)[0]; document.getElementById('f-q').value = q; await findRun(); await new Promise(r => setTimeout(r, 1800)); return { rows: document.querySelectorAll('.fr').length, first: F.items.slice(0, 3).map(k => k.type), found: document.getElementById('f-n').textContent, focusFn: typeof focusQuick };", in: nil, in: .page) { res in
                 var info = (try? res.get()) as? [String: Any] ?? ["error": "\(res)"]
                 web.takeSnapshot(with: nil) { img, _ in
-                    if let tiff = img?.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {
-                        try? png.write(to: URL(fileURLWithPath: out))
-                    }
+                    writePNG(img, to: out)
                     info["ok"] = true
                     panel.orderOut(nil)
                     done(info)

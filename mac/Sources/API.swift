@@ -521,9 +521,9 @@ func showInFinder(_ path: String, select: Bool, on screen: NSScreen?) -> [Int] {
             "set b to {(item 3 of argv) as integer, (item 4 of argv) as integer, (item 5 of argv) as integer, (item 6 of argv) as integer}",
             "tell application \"Finder\"", "set f to (POSIX file p) as alias",
             "if (item 2 of argv) is \"1\" then", "set w to make new Finder window to (container of f)", "else", "set w to make new Finder window to f", "end if",
-            "set bounds of w to b", "if (item 2 of argv) is \"1\" then select f", "activate", "end tell", "end run",
+            "try", "set bounds of w to b", "end try", "try", "if (item 2 of argv) is \"1\" then select f", "end try", "activate", "end tell", "end run",
         ], args: [path, select ? "1" : "0", String(left), String(top), String(left + Int(w)), String(top + Int(h))])
-        if !ok {
+        if !ok {   // Finder couldn't make the window at all: the plain way
             DispatchQueue.main.async {
                 if select { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) } else { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
             }

@@ -3,6 +3,15 @@ import AppKit
 import WebKit
 import Quartz
 
+/// The app's paper colour, behind every page.
+let PAPER = NSColor(srgbRed: 0xfb / 255.0, green: 0xfb / 255.0, blue: 0xfa / 255.0, alpha: 1)
+
+/// Save a picture as a PNG file (test runs save what a page looks like).
+@discardableResult func writePNG(_ img: NSImage?, to path: String) -> Bool {
+    guard let tiff = img?.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return false }
+    return (try? png.write(to: URL(fileURLWithPath: path))) != nil
+}
+
 /// The page's web view. The page tells it which cartridge is under the pointer; a drag that starts on one becomes a
 /// real file drag (to Finder, another disk, or the Trash in the Dock), the way Finder's own icons behave.
 final class RumiWebView: WKWebView {

@@ -1144,10 +1144,13 @@ const findClose = closeFind, findGone = () => $("find").hidden || $("find").clas
 // ↵ opens the thing itself: a folder on the map, a photo, video, page or code file in the viewer, anything else in its app.
 // ⌘↵ shows where it is in Finder. ⌥↵ shows it on the map.
 async function findGo(k, mode) {
-  closeFind(); recent.add(k);
-  if (mode === "finder") return reveal(k.path);
   const onMap = mode === "map";
-  if (!onMap && !isFolder(k) && !viewable(k)) return NATIVE ? api("/native/open", { path: k.path }) : reveal(k.path);
+  if (mode === "finder" || (!onMap && !isFolder(k) && !viewable(k))) {   // Finder, or the file's own app: only if it's still there
+    const r = await api(mode === "finder" || !NATIVE ? "/api/reveal" : "/native/open", { path: k.path }).catch(() => null);
+    if (r && r.ok === false) return findMissing(k);
+    closeFind(); recent.add(k); return;
+  }
+  closeFind(); recent.add(k);
   if (focusCat || changedOn) { focusCat = null; focusKinds = new Set(); changedOn = false; drawHeader(); if (current === dirOf(k.path) || isFolder(k)) await open(current, null, "filter"); }
   if (isFolder(k) && !onMap) return open(k.path);
   const parent = dirOf(k.path);

@@ -25,25 +25,28 @@
 <script>
 const findClose = () => NATIVE?.postMessage({ path: "/native/quick-close", body: {} }).catch(() => {});
 async function findGo(k, mode) {
-  recent.add(k);
-  if (mode === "finder") await api("/api/reveal", { path: k.path }).catch(() => {});
-  else if (mode === "map") await api("/native/show-in-rumi", { item: { path: k.path, name: k.name, size: k.size, type: k.type, cat: k.cat, pkg: !!k.pkg } }).catch(() => {});
-  else await api("/native/open", { path: k.path }).catch(() => {});
-  findClose();
+  const r = await (mode === "finder" ? api("/api/reveal", { path: k.path })
+    : mode === "map" ? api("/native/show-in-rumi", { item: { path: k.path, name: k.name, size: k.size, type: k.type, cat: k.cat, pkg: !!k.pkg } })
+    : api("/native/open", { path: k.path })).catch(() => null);
+  if (r && r.ok === false) return findMissing(k);
+  recent.add(k); findClose();
 }
 // called by the app each time the panel opens: what you typed last is still there, selected, so typing replaces it
+let focusSeq = 0;
 window.focusQuick = async () => {
+  const seq = ++focusSeq;
   if (!HOME) { const s = await api("/api/status").catch(() => null); if (s) HOME = s.home; }
   const i = $("f-q"); i.focus(); i.select(); findRun();
   // the map of the disk may have been let go while Rumi sat in the menu bar: it's read back in about half a second, and
-  // the results are drawn again with folders and sizes once it's in
-  for (let n = 0; n < 40; n++) {
+  // the results are drawn again with folders and sizes once it's in (a first scan takes longer; it waits about a minute)
+  for (let n = 0; n < 160 && seq === focusSeq; n++) {
     const s = await api("/api/status").catch(() => null);
-    if (!s || s.ready) { if (n) findRun(); break; }
-    await wait(150);
+    if (!s || s.ready) { if (n && seq === focusSeq) findRun(true); break; }
+    await wait(n < 40 ? 150 : 500);
   }
 };
-addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); findClose(); } });
+// Esc anywhere else in the panel (the search field handles its own)
+addEventListener("keydown", e => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); findClose(); } });
 focusQuick();
 </script>
 </body>

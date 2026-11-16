@@ -4,16 +4,23 @@
 // The page supplies three things: findGo(item, mode) to act on a result, findClose(), and optionally findGone().
 // Modes: "open" (↵) opens the thing itself, "finder" (⌘↵) shows where it is, "map" (⌥↵) shows it on Rumi's map.
 const findMode = e => e.metaKey ? "finder" : e.altKey ? "map" : "open";
-const F = { q: "", seq: 0, idx: [], spot: [], spotDone: false, items: [], sel: 0, empty: null, t: 0 };
+const F = { q: "", seq: 0, idx: [], spot: [], spotDone: false, items: [], sel: 0, moved: false, empty: null, t: 0 };
 const ICON_SEARCH = `<svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>`;
 const isFolder = k => k.type === "dir" && !k.pkg && !isApp(k);
 const recent = {
   get() { try { return JSON.parse(localStorage.getItem("rumi-recent") || "[]"); } catch { return []; } },
   add(k) { try { const r = recent.get().filter(x => x.path !== k.path); r.unshift({ path: k.path, name: k.name, size: k.size, type: k.type, cat: k.cat, pkg: !!k.pkg });
     localStorage.setItem("rumi-recent", JSON.stringify(r.slice(0, 5))); } catch {} },
+  drop(p) { try { localStorage.setItem("rumi-recent", JSON.stringify(recent.get().filter(x => x.path !== p))); } catch {} },
 };
-async function findRun() {
-  const q = $("f-q").value.trim(), seq = ++F.seq; F.q = q; F.sel = 0;
+// what a row points at was moved or deleted since it was listed: the row says so, and Recent forgets it
+function findMissing(k) {
+  recent.drop(k.path);
+  const s = $("f-list").querySelector(`.fr[data-i="${F.items.indexOf(k)}"] small`); if (s) s.textContent = "Not there any more";
+}
+// keep: the same search asked again (the map just came back), so the row you're on stays picked
+async function findRun(keep) {
+  const q = $("f-q").value.trim(), seq = ++F.seq; F.q = q; if (keep !== true) { F.sel = 0; F.moved = false; }
   if (!q) {
     F.idx = F.spot = []; F.empty = { recent: recent.get(), big: F.empty?.big || [] }; findDraw();
     const r = await api(`/api/search?q=`).catch(() => null); // (while the map is being read back the answer is empty: the list already shown stays until the real one arrives)
@@ -32,8 +39,10 @@ const fRow = (k, i, q) => {
   return `<div class="fr ${i === F.sel ? "sel" : ""}" data-i="${i}">${tile(k)}<div class="fm"><b data-tip="${esc(tilde(k.path))}">${hl}</b><small>${esc(whereOf(k.path))}</small></div><span class="num">${k.size ? fmt(k.size) : ""}</span><button class="ffind" data-tip="Show in Finder · ⌘↵" aria-label="Show in Finder">${ICON.finder}</button></div>`;
 };
 function findDraw() {
-  const L = $("f-list"); let html = "", i = 0; F.items = [];
-  const sect = (title, list) => { if (!list.length) return; html += `<div class="fh">${title}</div>`; for (const k of list) { html += fRow(k, i++, F.q); F.items.push(k); } };
+  // results that arrive later re-sort the list: the row you moved to stays the one that's picked
+  const L = $("f-list"), keep = F.moved ? F.items[F.sel]?.path : null, sects = [];
+  const sect = (title, list) => { if (list.length) sects.push([title, list]); };
+  let none = "";
   F.drawnQ = F.empty ? "" : F.q;
   if (F.empty) {
     sect("Recent", F.empty.recent); sect("Biggest files", F.empty.big);
@@ -45,12 +54,16 @@ function findDraw() {
     const dirs = all.filter(isFolder), files = all.filter(k => !isFolder(k));
     sect("Folders", dirs.slice(0, 4)); sect("Files", files.slice(0, 40));
     $("f-n").textContent = all.length ? `${all.length >= 200 ? "200+" : all.length} found` : F.spotDone ? "" : "…";
-    if (!all.length && F.spotDone) html = `<div class="fnone">Nothing named “${esc(F.q)}”</div>`;
+    if (!all.length && F.spotDone) none = `<div class="fnone">Nothing named “${esc(F.q)}”</div>`;
   }
-  L.innerHTML = html;
+  F.items = sects.flatMap(s => s[1]);
+  F.sel = keep ? Math.max(0, F.items.findIndex(k => k.path === keep)) : 0;
+  let i = 0;
+  L.innerHTML = none || sects.map(([title, list]) => `<div class="fh">${title}</div>` + list.map(k => fRow(k, i++, F.q)).join("")).join("");
 }
 function findMove(d) {
   if (!F.items.length) return;
+  F.moved = true;
   F.sel = (F.sel + d + F.items.length) % F.items.length;
   $("f-list").querySelectorAll(".fr").forEach(r => r.classList.toggle("sel", +r.dataset.i === F.sel));
   $("f-list").querySelector(".fr.sel")?.scrollIntoView({ block: "nearest" });

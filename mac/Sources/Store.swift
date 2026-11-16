@@ -323,7 +323,7 @@ final class Store {
         denied = den
         baselineAt = base.at; baseUsed = base.used; churnStale = false
         let edited = replayTrash()   // things trashed while this scan ran may still be in the new tree
-        dupes.status = dupes.groups.isEmpty ? "idle" : "running"
+        dupes.status = "running"   // the duplicate check starts right below; unload() waits for it
         scanning = false
         fromSaved = false
         unloaded = false
@@ -384,16 +384,17 @@ final class Store {
         return true
     }
 
-    /// Read the map back in if it was let go. Returns at once; the status says "loading" until it's there.
+    /// Read the map back in if it was let go. Returns at once; the status says "loading" until it's there. A scan that's
+    /// running doesn't stop this: the saved map shows until the new one lands (loadSaved never replaces a newer map).
     func ensureLoaded() {
         lock.lock()
-        guard root == nil, unloaded, !loading, !scanning else { lock.unlock(); return }
+        guard root == nil, unloaded, !loading else { lock.unlock(); return }
         loading = true
         lock.unlock()
         DispatchQueue.global(qos: .userInitiated).async { [self] in
             loadSaved()
             lock.lock(); let none = root == nil; if !none { unloaded = false }; lock.unlock()
-            if none { startScan() }   // the saved file is gone or unreadable: scan
+            if none, access != "needed" { startScan() }   // the saved file is gone or unreadable: scan
         }
     }
 

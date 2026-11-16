@@ -147,8 +147,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             DispatchQueue.global(qos: .userInitiated).async { done(trashJSON(paths)) }
         case "/api/reveal":
             // in a new Finder window on the screen this was asked from (the panel's, or the main window's)
-            showInFinder(body["path"] as? String ?? "", select: true, on: message.webView?.window?.screen)
-            done(["ok": true])
+            done(["ok": !showInFinder(body["path"] as? String ?? "", select: true, on: message.webView?.window?.screen).isEmpty])
         case "/api/put-back":
             let items = (body["items"] as? [[String: Any]] ?? []).map { $0.compactMapValues { $0 as? String } }
             DispatchQueue.global(qos: .userInitiated).async { done(putBackJSON(items)) }
@@ -176,9 +175,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             var cfg: WKSnapshotConfiguration? = nil
             if let r = body["rect"] as? [Double], r.count == 4 { cfg = WKSnapshotConfiguration(); cfg!.rect = CGRect(x: r[0], y: r[1], width: r[2], height: r[3]) }
             wv.takeSnapshot(with: cfg) { img, _ in
-                if let tiff = img?.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {
-                    try? png.write(to: URL(fileURLWithPath: out))
-                }
+                writePNG(img, to: out)
                 done(["ok": true])
             }
         case "/native/viewer":
@@ -191,6 +188,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             ContextMenu.show(body["items"] as? [[String: Any]] ?? [], in: v) { done(["chosen": $0 ?? NSNull()]) }
         case "/native/open":
             let p = body["path"] as? String ?? ""
+            guard FileManager.default.fileExists(atPath: p) else { return done(["ok": false]) }   // moved or deleted since it was listed
             if let p = pathInRoots(p) {
                 let v = try? URL(fileURLWithPath: p).resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
                 if v?.isDirectory == true && v?.isPackage != true { showInFinder(p, select: false, on: message.webView?.window?.screen) }   // a folder: a Finder window here

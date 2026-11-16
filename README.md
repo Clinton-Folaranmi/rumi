@@ -1,47 +1,50 @@
 # Rumi
 
-A Mac app that shows what's filling your disk as a shelf of cartridges, and helps you clear it safely.
+A Mac app for managing disk space, searching for files, and giving you better control over your storage.
 
-![Rumi's cartridges: files, folders, an opened folder, the small leftovers, and what macOS keeps](docs/cartridges.png)
+![Rumi's cartridges: a file, a folder, small and narrow ones, an open folder, the small stuff, and what macOS uses](docs/cartridges.png)
 
-## What it does
+## What you can do with it
 
-- **Maps your disk.** Home and Applications are drawn to size. Colour is the kind of content, a tab means folder, and the stripe on a folder shows the mix inside.
-- **Hides nothing.** The space outside your folders shows as one locked "macOS keeps this" cartridge, broken down into what it is.
-- **Shows what changed.** A chip says how much the disk moved since last time; click it to see only what grew, shrank, is new or was removed.
-- **Cleans up safely.** Caches, old downloads, duplicates and big forgotten files, each labelled Safe or Check first. Everything goes to the Trash and can be undone.
-- **Finds things, from anywhere.** A cartridge in the menu bar, or ⌃⌥Space from any app, opens search over whatever you're doing: type, press ↵, and the file opens. ⌘↵ shows it in Finder. In the app, ⌘F does the same, and the header's kinds filter the map to just videos, PDFs and so on.
-- **Opens things.** Photos, videos, web pages and code open inside the app.
+- See what's taking up space. Bigger cartridge, more space. Each colour is a kind of file.
+- See the space macOS uses for itself, which most apps leave out.
+- See what grew or shrank since you last looked.
+- Clear caches, old downloads and duplicates. Everything goes to the Trash, so you can undo it.
+- Search for any file from the menu bar, or press ⌃⌥Space in any app.
+- Open photos, videos and code without leaving the app.
 
-Nothing leaves your Mac: no account, no tracking, no network calls.
+It runs entirely on your Mac. No account, and nothing is sent anywhere.
 
-## Build it
+## Install
 
-You need an Apple Silicon Mac on macOS 14 or later and the Xcode Command Line Tools (`xcode-select --install`). Xcode itself isn't needed.
+There's no download yet, so you'll have to build it yourself.
+
+You need an Apple Silicon Mac on macOS 14 or later, and Apple's command line tools (`xcode-select --install`). You don't need Xcode.
+
+Download or clone this repo, then run this in its folder:
 
 ```sh
-scripts/build.sh            # builds build/Rumi.app
-scripts/build.sh --install  # also copies it to /Applications and opens it
+scripts/build.sh --install
 ```
 
-On first launch Rumi asks for Full Disk Access, so Mail, Photos and the like aren't missing from the map. Closing the window leaves Rumi in the menu bar and frees the window's memory; ⌘Q quits. Right-click the cartridge to have Rumi start at login.
+That builds Rumi, copies it to Applications and opens it. The first time, it asks for Full Disk Access so it can see Mail, Photos and other protected folders.
 
-**Signing.** macOS ties Full Disk Access to the app's signature. Set `RUMI_SIGN_ID` to a code-signing identity in your keychain (a self-signed one works) and access survives rebuilds. Without one the build is signed ad hoc and macOS asks again after each build.
+Closing the window keeps Rumi in the menu bar. ⌘Q quits it. Right-click the menu bar icon to start it at login.
 
-## How it's put together
+### If you rebuild often
 
-| Folder | What's in it |
-|---|---|
-| `mac/Sources` | The Swift app: a parallel disk scanner, the saved scan, duplicates, search, the Trash and Undo, and one window holding a web view |
-| `web` | The interface: `index.html` (the map and lists), `quick.html` (the menu-bar search panel), `base.js` and `find.js` (shared helpers and search), `app.css` and `styles.css` (the cartridge look), `rumi.js` (the mascot), `design-system.html` (every rule and component) |
-| `scripts` | The build, with no Xcode project: plain `swiftc` |
+macOS forgets Full Disk Access each time the app is rebuilt, unless it's signed the same way every time. Set `RUMI_SIGN_ID` to a code-signing identity from your keychain (a self-signed one is fine) and the access sticks.
 
-The page talks to the app over a private `rumi://` scheme and a message bridge, with a token that's new every launch. Pages opened in the viewer run sealed off and can't reach either.
+## The code
+
+- `mac/Sources` is the Swift app: the disk scanner, search, duplicates, and the Trash with undo.
+- `web` is the interface. The app shows it in a web view.
+- `scripts` is the build. It's plain `swiftc`, with no Xcode project.
 
 ## Status
 
-A personal project, built on and for one Mac. It works well there; expect rough edges elsewhere. There's no packaged download yet.
+I built this for my own Mac. It works well there, and you may hit rough edges on yours.
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE). The bundled font, M PLUS Rounded 1c, is under the SIL Open Font License (`web/fonts/OFL.txt`).
+MIT. See [LICENSE](LICENSE). The font, M PLUS Rounded 1c, is under the SIL Open Font License (`web/fonts/OFL.txt`).

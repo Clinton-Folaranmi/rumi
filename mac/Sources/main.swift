@@ -42,7 +42,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     var web: WKWebView?
     let scheme = SchemeHandler()
     let bridge = Bridge()
-    let paper = NSColor(srgbRed: 0xfb / 255.0, green: 0xfb / 255.0, blue: 0xfa / 255.0, alpha: 1)
 
     /// A web view configuration for the app's own pages: the rumi:// scheme, the action bridge and this launch's token.
     /// The main window and the menu-bar search panel each get one.
@@ -65,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         v.isInspectable = DEV_MODE
         v.navigationDelegate = self
         v.uiDelegate = self
-        v.underPageBackgroundColor = paper
+        v.underPageBackgroundColor = PAPER
         return v
     }
 
@@ -81,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         window.title = "Rumi"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = paper
+        window.backgroundColor = PAPER
         window.appearance = NSAppearance(named: .aqua)
         window.minSize = NSSize(width: 1040, height: 680)
         window.contentView = web ?? NSView()
@@ -99,7 +98,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
-        pageLoaded = !atLogin
         if !testRun {   // every 20 s: with the window closed and search unused for a while, let memory go
             Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.idleTick() }
         }
@@ -174,9 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         self.web?.callAsyncJavaScript(js, in: nil, in: .page) { res in
                         if ProcessInfo.processInfo.environment["RUMI_EVAL"] != nil { print("eval:", (try? res.get()) ?? "failed: \(res)") }
                         self.web?.takeSnapshot(with: nil) { img, _ in
-                            if let img, let tiff = img.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
-                                try? png.write(to: URL(fileURLWithPath: out)); print("snapshot:", out)
-                            }
+                            if writePNG(img, to: out) { print("snapshot:", out) }
                             self.afterRefresh(tries: 0)
                         }
                         }
@@ -193,7 +189,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     // While its window is closed Rumi only needs to answer searches, so the map's page is let go a minute after the window
     // closes (about 100 to 200 MB back) and loaded again when the window returns. The map of the disk itself stays in memory.
-    var pageLoaded = true
     private var unloadTimer: DispatchWorkItem?
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as? NSWindow) === window, !CommandLine.arguments.contains("--snapshot") else { return }
@@ -213,8 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     func unloadPage() {
-        guard pageLoaded else { return }
-        pageLoaded = false
+        guard web != nil else { return }
         Store.shared.viewerOpen = false
         // the web view itself goes: only that ends its helper process and frees the memory (a blank page stays cached)
         window.contentView = NSView()
@@ -224,8 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     @objc func showMainWindow() {
         unloadTimer?.cancel()
         Store.shared.ensureLoaded()
-        if web == nil { web = makeWebView(); window.contentView = web; pageLoaded = false }
-        if !pageLoaded { pageLoaded = true; web?.load(URLRequest(url: URL(string: "rumi://app/index.html")!)) }
+        if web == nil { web = makeWebView(); window.contentView = web; web?.load(URLRequest(url: URL(string: "rumi://app/index.html")!)) }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -263,17 +256,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         after(3) { reopen("window, page let go") {
         after(2) { self.window.orderOut(nil); self.unloadPage(); Q.releasePanel(); dropMap(); say("map let go: \(Store.shared.root == nil)")
         after(3) { reopen("window, page and map let go") {
+        // as after a start at login: nothing in memory and the quiet scan already running. The saved map must still show.
+        after(2) { self.window.orderOut(nil); self.unloadPage(); dropMap(); Store.shared.startScan(quiet: true)
+        after(3) { say("scan running: \(Store.shared.scanning), map in memory: \(Store.shared.root != nil)"); reopen("window, nothing kept and a scan running") {
             self.holdUntil = Date()
-        } } } } } } } } } } } } } } } } } }
+        } } } } } } } } } } } } } } } } } } } } }
     }
 
-    /// From the menu-bar panel: show something on the map (once the page is up, if it had to be loaded again).
-    func showOnMap(_ item: [String: Any], tries: Int = 0) {
-        if tries == 0 { showMainWindow() }
-        let json = String(data: jsonData(item), encoding: .utf8) ?? "{}"
-        web?.evaluateJavaScript("(() => { if (!(window.rumiShowOnMap && typeof status === 'object' && status && status.ready && document.querySelector('#map .b'))) return false; rumiShowOnMap(\(json)); return true; })()") { ok, _ in
-            if ok as? Bool != true, tries < 25 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.showOnMap(item, tries: tries + 1) } }
+    private var mapAsk = 0
+    /// From the menu-bar panel: show something on the map, once the page is up and the map is drawn. Both may have to come
+    /// back first, and a first scan takes a while, so it keeps trying for a minute and a half. A newer ask replaces it.
+    func showOnMap(_ item: [String: Any]) {
+        showMainWindow()
+        mapAsk += 1
+        let ask = mapAsk, json = String(data: jsonData(item), encoding: .utf8) ?? "{}"
+        func attempt(_ tries: Int) {
+            guard ask == mapAsk else { return }
+            web?.evaluateJavaScript("(() => { if (!(window.rumiShowOnMap && typeof status === 'object' && status && status.ready && document.querySelector('#map .b'))) return false; rumiShowOnMap(\(json)); return true; })()") { ok, _ in
+                if ok as? Bool != true, tries < 300 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { attempt(tries + 1) } }
+            }
         }
+        attempt(0)
     }
 
     /// Test runs: don't quit before this time (a test that lets the page go needs the app to outlive it).

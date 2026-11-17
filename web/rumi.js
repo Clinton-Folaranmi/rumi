@@ -1,5 +1,6 @@
 // Rumi, the mascot: a purple cartridge whose label is a little dark screen with a glowing face ("Screen", picked Nov 9).
-// Rumi.svg(mood, { size, simple }) returns markup; Rumi.mount(el, mood, opts) swaps it in with a screen power-on.
+// Rumi.svg(mood, { size, simple }) returns markup; Rumi.mount(el, mood, opts) swaps it in with a screen power-on;
+// Rumi.face(mood, width) is the face alone.
 // Moods: idle, scan, wow, happy, sleep, empty, wink. All motion is CSS (styles.css › "Rumi the mascot").
 (function () {
   const BODY = "#8a7fe6", SCREEN = "#231f36", GLOW = "#ff8fb3", SLEEPY = "#a99cf5", INK = "#18181b", LED = "#7ee2a8";
@@ -114,5 +115,9 @@
     el.innerHTML = svg(mood, opt);
     if (!first || opt.powerOn) el.firstElementChild.classList.add("r-on");
   }
-  window.Rumi = { svg, mount };
+  // just the face, in the colour of the text around it: for a screen bigger than Rumi's own (the Bin screen)
+  function faceOnly(mood = "idle", w = 84) {
+    return `<svg class="rumi r-${mood}" viewBox="0 0 100 60" width="${w}" height="${Math.round(w * .6)}" style="--lag:${(-(++uid * 1.7) % 5.2).toFixed(2)}s" aria-hidden="true">${face(mood, { x: 0, y: 0, w: 100, h: 60 }, false, "currentColor")}</svg>`;
+  }
+  window.Rumi = { svg, mount, face: faceOnly };
 })();

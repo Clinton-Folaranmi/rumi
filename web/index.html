@@ -34,7 +34,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
   <section class="mapcol">
     <div class="crumbs" id="crumbs"></div>
     <div id="map"><div class="grainmap"></div></div>
-    <div class="status" id="status"><span class="hint3"><kbd>Esc</kbd> up</span><span class="hint4" id="hint-ql" hidden><kbd>Space</kbd> preview</span><span class="hint5" id="hint-trash" hidden><kbd>⌘⌫</kbd> trash</span></div>
+    <div class="status" id="status"><span class="hint3"><kbd>Esc</kbd> up</span><span class="hint4" id="hint-ql" hidden><kbd>Space</kbd> preview</span><span class="hint5" id="hint-trash" hidden><kbd>⌘⌫</kbd> <span id="hint-trash-l">trash</span></span></div>
   </section>
   <aside>
     <div class="seg" id="tabs">
@@ -50,7 +50,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
 <div class="tray" id="tray">
   <div class="info"><b class="num" id="tray-size">0 GB</b><div id="tray-count">0 items</div></div>
   <button class="btn ghost" id="tray-clear">Clear</button>
-  <button class="btn primary" id="tray-go"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg><span id="tray-go-l">Move to Trash</span></button>
+  <button class="btn primary" id="tray-go"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg><span id="tray-go-l"></span></button>
 </div>
 
 <div class="overlay" id="scanning" hidden>
@@ -73,13 +73,17 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
 </div>
 
 <div class="overlay" id="confirm" hidden>
-  <div class="modal">
-    <h2 id="cf-title">Move to Trash?</h2>
-    <p>You can put them back until you empty the Trash.</p>
-    <p class="warnline" id="cf-warn" hidden></p>
-    <ul id="cf-list"></ul>
-    <p class="note" id="cf-first" hidden>macOS will ask to let Rumi use Finder. Say OK so Put Back works.</p>
-    <div class="acts"><button class="btn" id="cf-no">Cancel</button><button class="btn primary" id="cf-yes">Move to Trash</button></div>
+  <div class="binbox">
+    <div class="sc" id="sc">
+      <div class="sc-ridges"><i></i><i></i><i></i></div>
+      <div class="sc-screen"><div class="sc-in" id="sc-in"></div></div>
+      <div class="sc-foot"><span>RUMI</span><i class="sc-led" id="sc-led"></i></div>
+      <div class="sc-keys" id="sc-keys"></div>
+      <div class="sc-teeth"></div>
+      <div class="sc-stars" id="sc-stars"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <button class="sc-undo" id="sc-undo" hidden data-tip="Put everything back where it was">Undo</button>
+    <p class="sc-note" id="sc-note" hidden>macOS will ask to let Rumi use Finder. Say OK so Put Back works.</p>
   </div>
 </div>
 
@@ -105,7 +109,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
     <button class="btn ghost vi" id="v-app" data-tip="Open in its app"></button>
     <button class="btn ghost vi" id="v-finder" data-tip="Show in Finder"></button>
     <button class="btn small" id="v-pick"></button>
-    <button class="btn ghost vi" id="v-trash" data-tip="Move to Trash · ⌘⌫"></button>
+    <button class="btn ghost vi" id="v-trash"></button>
     <button class="btn ghost vi" id="v-x" data-tip="Close · Esc"></button>
   </div>
   <div class="vstage" id="v-stage"><div class="vframe" id="v-frame"></div>
@@ -217,6 +221,40 @@ function remember(map, key, val, cap) {
 const recall = (map, key) => { const v = map.get(key); if (v !== undefined) { map.delete(key); map.set(key, v); } return v; };
 const keepMeta = (path, item) => remember(meta, path, item, CAP.meta);
 
+/* ---------- what removing something really frees ----------
+   Files can share space (a copy made in Finder, a package linked into many projects), so a folder's size isn't always what
+   comes back. The app measures it for Clean up rows and for whatever is picked, a few at a time, and the numbers settle in. */
+const frees = new Map(), freesAsked = new Set(), freesQ = [];
+let freesBusy = 0, freesT = 0, calmUntil = 0;
+const backOf = (p, size) => { const f = frees.get(p); return f ? Math.min(f.frees, size) : size; };
+// items: [path, size on the map]. What's picked is measured first and at full speed; the Clean up list quietly ("low").
+function wantFrees(items, low) {
+  if (!NATIVE) return;
+  for (const [p, size] of items) {
+    if (frees.has(p)) continue;
+    if (!freesAsked.has(p)) { freesAsked.add(p); low ? freesQ.push([p, size, true]) : freesQ.unshift([p, size, false]); }
+    else if (!low) { const i = freesQ.findIndex(q => q[0] === p); if (i > 0) freesQ.unshift(...freesQ.splice(i, 1).map(q => [q[0], q[1], false])); }
+  }
+  while (freesBusy < 2 && freesQ.length) {
+    const [p, size, quiet] = freesQ.shift(); freesBusy++;
+    api("/api/frees", { path: p, size, low: quiet }).then(r => { if (r && r.frees !== undefined) { frees.set(p, r); freesLanded(p, size); } }).catch(() => {})
+      .finally(() => { freesBusy--; wantFrees([]); });
+  }
+}
+// most things free exactly what they use: the page is only drawn again for the ones that don't
+function freesLanded(p, size) {
+  const now = backOf(p, size);
+  if (picked.has(p)) picked.set(p, backOf(p, picked.get(p)));
+  if (size - now < 2 ** 20) return;
+  // the list is redrawn with the new size, but not under the Bin card or while a number is counting: a redraw there
+  // makes the motion stutter
+  const draw = () => { if (!$("confirm").hidden || performance.now() < calmUntil) { freesT = setTimeout(draw, 400); return; } syncSelection(); if (tab === "cleanup" && $("insp").hidden) drawPane(); };
+  clearTimeout(freesT); freesT = setTimeout(draw, 200);
+}
+// a Clean up row can stand for several folders (an app's caches): its parts
+const partsOf = s => s.parts || [{ path: s.path, size: s.size }];
+const suggFor = p => (sugg || []).find(s => s.path === p || (s.parts && s.parts.some(x => x.path === p)));
+
 /* ---------- selection ---------- */
 function effective() {
   const paths = [...picked.keys()].sort(), keep = [];
@@ -231,12 +269,15 @@ function toggle(path, size, on, item) {
   syncSelection();
 }
 function syncSelection() {
+  wantFrees([...picked]);
   const eff = effective(), total = eff.reduce((s, p) => s + picked.get(p), 0);
   $("tray").classList.toggle("on", eff.length > 0);
   const ts = $("tray-size"), tsv = fmt(total);
   if (ts.textContent !== tsv && eff.length) { ts.textContent = tsv; ts.classList.remove("bump"); void ts.offsetWidth; ts.classList.add("bump"); } else if (ts.textContent !== tsv) ts.textContent = tsv;
-  const tl = $("tray-go-l"), want = eff.length === 1 && eff[0] === TRASH() ? "Empty Trash…" : "Move to Trash"; if (tl.textContent !== want) tl.textContent = want;
-  const tc = `${eff.length} item${eff.length === 1 ? "" : "s"}`; if ($("tray-count").textContent !== tc) $("tray-count").textContent = tc;
+  const tl = $("tray-go-l"), want = eff.length === 1 && eff[0] === TRASH() ? `Empty ${BIN}…` : `Move to ${BIN}`; if (tl.textContent !== want) tl.textContent = want;
+  // space shared with copies elsewhere doesn't come back, so it isn't in the total: say how much
+  const stays = eff.reduce((a, p) => { const f = frees.get(p); return a + (f ? Math.max(0, f.uses - f.frees) : 0); }, 0);
+  const tc = `${eff.length} item${eff.length === 1 ? "" : "s"}${stays > 10 * 2 ** 20 ? ` · ${fmt(stays)} shared, stays` : ""}`; if ($("tray-count").textContent !== tc) $("tray-count").textContent = tc;
   // touch only what changed: a map draw calls this with hundreds of cartridges on screen
   for (const el of document.querySelectorAll("[data-path]")) {
     const on = picked.has(el.dataset.path);
@@ -389,7 +430,7 @@ const goBack = () => dialogUp() ? Promise.resolve() : open(() => hist.back.lengt
 const goForward = () => dialogUp() ? Promise.resolve() : open(() => hist.fwd.length ? hist.fwd.at(-1) : null, null, "fwd");
 async function doOpen(path, fromEl, how) {
   if (V.open) closeViewer(true);
-  closeInsp();
+  if (!inspEl?.closest("#pane")) closeInsp();   // a how-to card belongs to its row in the list, not to the map
   const map = $("map");
   map.querySelectorAll(".layer").forEach(l => l.getAnimations({ subtree: true }).forEach(a => a.finish()));   // a click mid-motion lands the last one first
   await null;
@@ -726,19 +767,38 @@ function hoverTip(e, k) {
 /* ---------- side panel ---------- */
 function row(o) {
   // a row shows the name; where it is (the full path) is in the hover hint
-  const { path, size, title, sub, why, tag, tagText, rtl, max, sizeNote, item, open: canOpen } = o;
+  const { path, size, title, sub, why, tag, tagText, rtl, max, sizeNote, sizeTip, item, open: canOpen, openApp, how, app } = o;
   keepMeta(path, item);
-  const owner = ownerOf(path);
+  const owner = ownerOf(path), icon = app ? appTile(app, item) : tile(item);
+  if (how) return howRow(o, icon);
+  // its app is running: the row can't be picked until the app quits. An orange tag and line say so
+  if (openApp) return `<div class="row locked isopen" data-size="${size}" data-tip="Quit ${esc(openApp)}, then this can go">${icon}
+    <div class="nm"><div class="t"><span class="tt">${esc(title)}</span><span class="tag open">Open</span></div><div class="why">Quit ${esc(openApp)} first</div></div>
+    <div class="sz num">${fmt(size)}</div></div>`;
   return `<div class="row${owner ? " locked" : ""}" ${owner ? "" : `data-row="${esc(path)}"`} data-size="${size}">
     ${owner ? `<span class="lock" title="Part of ${esc(owner)}"><svg class="i" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg></span>`
             : `<input type="checkbox" aria-label="Add ${esc(title)} to Clean up" data-path="${esc(path)}" data-size="${size}" ${picked.has(path) ? "checked" : ""}>`}
-    ${path === TRASH() ? `<span class="tile" style="--c:var(--c-other)"><svg class="i" viewBox="0 0 16 16" style="width:17px;height:17px"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg></span>` : tile(item)}
-    <div class="nm"><div class="t"><span class="tt${rtl ? " rtl" : ""}" data-tip="${esc(tilde(path))}">${rtl ? "‎" : ""}${esc(title)}${rtl ? "‎" : ""}</span>${owner ? `<span class="tag keep long">Part of ${esc(owner.replace(/'s data$/, ""))}</span>` : tag ? `<span class="tag ${tag}">${tagText || (tag === "safe" ? "Safe" : "Check first")}</span>` : ""}</div>
+    ${path === TRASH() ? `<span class="tile" style="--c:var(--c-other)"><svg class="i" viewBox="0 0 16 16" style="width:17px;height:17px"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg></span>` : icon}
+    <div class="nm"><div class="t"><span class="tt${rtl ? " rtl" : ""}" data-tip="${esc(tilde(path))}">${rtl ? "‎" : ""}${esc(title)}${rtl ? "‎" : ""}</span>${owner ? `<span class="tag keep long">Part of ${esc(owner.replace(/'s data$/, ""))}</span>` : tag ? `<span class="tag ${tag}">${tagText || TAG[tag]}</span>` : ""}</div>
       ${why ? `<div class="why">${esc(why)}</div>` : sub ? `<div class="p">‎${esc(sub)}‎</div>` : ""}</div>
-    <div class="sz num">${fmt(size)}${sizeNote ? `<small>${esc(sizeNote)}</small>` : ""}</div>
+    <div class="sz num"${sizeTip ? ` data-tip="${esc(sizeTip)}"` : ""}>${fmt(size)}${sizeNote ? `<small>${esc(sizeNote)}</small>` : ""}</div>
     ${max ? `<div class="bar"><i style="width:${Math.max(1, (size / max) * 100)}%;background:${color(item.cat)}"></i></div>` : ""}
     <div class="hov">${canOpen ? `<button data-open="${esc(path)}">${ICON.open}Open</button>` : ""}<button data-reveal="${esc(path)}">${ICON.finder}Finder</button></div>
   </div>`;
+}
+const TAG = { safe: "Safe", review: "Check first", keep: "Won't touch" };
+// Something Rumi doesn't clear itself: the row opens a card that says how (so does "How to", which shows on hover like
+// Finder does on the other rows). No checkbox, it can't be picked.
+function howRow({ path, size, title, why, tag }, icon) {
+  return `<div class="row nochk how" data-how="${esc(path)}">${icon}
+    <div class="nm"><div class="t"><span class="tt" data-tip="${esc(tilde(path))}">${esc(title)}</span><span class="tag ${tag}">${TAG[tag]}</span></div><div class="why">${esc(why)}</div></div>
+    <div class="sz num">${fmt(size)}</div>
+    <div class="hov"><button>${ICON.info}How to</button><button data-reveal="${esc(path)}">${ICON.finder}Finder</button></div></div>`;
+}
+// A row that belongs to an app: the app's icon takes the folder's place on the cartridge's label, which is quicker to
+// find than a name. If the app can't be found it stays a folder.
+function appTile(app, item) {
+  return `<span class="tile withimg" style="--c:${color(item.cat)}">${ICON.folder}<img class="app" data-src="${thumbURL(app, 112)}" onload="this.classList.add('ok')" onerror="this.remove()"></span>`;
 }
 // Things that belong to an app: inside an .app / library package, or deep inside an app's data folder.
 // Rumi shows them but won't put them in the Trash (the Mac side refuses too).
@@ -760,20 +820,26 @@ function ownerOf(p) {
   const pkg = /\/([^/]+)\.(app|framework|bundle|photoslibrary|photolibrary|fcpbundle|imovielibrary|musiclibrary|logicx|xcarchive)\/./i.exec(p);
   if (pkg) return pkg[1];
   const data = HOME && new RegExp("^" + HOME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "/Library/(?:Application Support|Containers|Group Containers)/([^/]+)/.").exec(p);
-  if (data && !(sugg || []).some(s => s.path === p)) return data[1] + "'s data";
+  const s = data && suggFor(p);
+  if (data && !(s && s.act !== "how")) return data[1] + "'s data";
   return null;
 }
 // Worth a second look before trashing: anything in Library or a hidden folder that isn't on the Clean up list as safe.
 function needsCare(p) {
-  const s = (sugg || []).find(x => x.path === p);
+  const s = suggFor(p);
   if (s) return s.safety !== "safe";
   return /\/Library\/|\/\.[^/]+\//.test(String(p).replace(HOME, ""));
 }
 const asItem = (path, cat, type) => ({ path, name: base(path), cat: cat || "other", type: type || "file" });
 function guessType(path, size) { const n = meta.get(path); return n?.type || (ext(path) && !/\.app$/.test(path) ? "file" : "dir"); }
 
-const SUGG_CAT = { Caches: "cache", Developer: "dev", Trash: "other", Downloads: "archive", "Large & old": "video", Apps: "app" };
-const GROUP_NOTE = { Caches: "Rebuilt automatically", Developer: "Comes back when needed", Downloads: "Installers & old files", "Large & old": "Untouched 6+ months", Apps: "Unused for months" };
+const SUGG_CAT = { Caches: "cache", Developer: "dev", Trash: "other", Downloads: "archive", "Large & old": "video", Apps: "app", "How to": "dev" };
+// what each group is, in the hint on its heading
+const GROUP_NOTE = { Caches: "Apps rebuild these by themselves when they need them", Developer: "Build files and packages. They come back the next time you build or install",
+  Downloads: "Installers for apps you already have, and files untouched for 3 months", "Large & old": "Big files untouched for 6 months or more",
+  Apps: "Apps you haven't opened in 4 months or more", "How to": "Rumi won't clear these itself. Each one shows the steps" };
+const grp = (name, sum, note) => `<div class="grp"${note ? ` data-tip="${esc(note)}"` : ""}><span class="t">${esc(name)}</span>${sum ? `<span class="s num">${sum}</span>` : ""}${note ? `<span class="info">${ICON.info}</span>` : ""}</div>`;
+const GROUP_NAME = g => g === "How to" ? "Clear these yourself" : g === "Trash" ? BIN : g;
 
 let paneSeq = 0, dupesPoll = 0;
 async function drawPane(rise) {
@@ -798,29 +864,36 @@ addEventListener("resize", () => movePill());
 async function drawPaneBody(pane, live) {
 
   if (tab === "cleanup") {
-    if (!sugg) { const s = (await api("/api/suggestions")).items; sugg ||= s; if (!live()) return false; }
+    if (!sugg) { const r = (await api("/api/suggestions")).items; sugg ||= r; if (!live()) return false; }
+    // what each row gives back: its size until the real figure has been measured, then that
+    const back = s => partsOf(s).reduce((a, x) => a + backOf(x.path, x.size), 0);
+    const mine = sugg.filter(s => s.act !== "how");   // what Rumi can move to the Trash; the rest it only explains
+    wantFrees(mine.flatMap(s => partsOf(s).map(x => [x.path, x.size])), true);
+    for (const s of sugg) if (s.open || s.act === "how") partsOf(s).forEach(x => picked.delete(x.path));   // an app that opened since
     setBadges();
     if (!sugg.length) { pane.innerHTML = `<div class="empty">${Rumi.svg("happy", { size: 104 })}<span class="bignum">All tidy</span></div>`; return; }
     const groups = {}; sugg.forEach(s => (groups[s.group] ||= []).push(s));
-    const safe = sugg.filter(s => s.safety === "safe" && s.action !== "empty"), safeTotal = safe.reduce((a, s) => a + s.size, 0);
-    const all = sugg.reduce((a, s) => a + s.size, 0);
-    let h = `<div class="intro"><span class="bignum num">${fmt(all)}</span>you can free up
+    const safe = mine.filter(s => s.safety === "safe" && s.action !== "empty" && !s.open), safeTotal = safe.reduce((a, s) => a + back(s), 0);
+    const all = mine.reduce((a, s) => a + back(s), 0);
+    let h = `<div class="intro"><span class="bignum num" data-tip="What Rumi can move to the ${BIN}">${fmt(all)}</span>
       <div class="btns"><button class="btn small" id="pick-safe" data-tip="Caches and build files that come back on their own">Select all safe · ${fmt(safeTotal)}</button></div></div>`;
-    const order = ["Trash", "Caches", "Developer", "Downloads", "Large & old", "Apps"];
+    const order = ["Trash", "Caches", "Developer", "Downloads", "Large & old", "Apps", "How to"];
     for (const g of Object.keys(groups).sort((a, b) => order.indexOf(a) - order.indexOf(b))) {
-      const items = groups[g].sort((a, b) => b.size - a.size), gsum = items.reduce((a, s) => a + s.size, 0);
-      h += `<div class="grp"><span class="t">${esc(g)}</span><span class="s num">${fmt(gsum)}</span><span class="d">${esc(GROUP_NOTE[g] || "")}</span></div>`;
+      const items = groups[g].sort((a, b) => back(b) - back(a)), gsum = items.reduce((a, s) => a + back(s), 0);
+      h += grp(GROUP_NAME(g), fmt(gsum), GROUP_NOTE[g]);
       for (const s of items) {
-        if (s.action === "empty") {
-          h += row({ path: s.path, size: s.size, title: "Trash", tag: "review", tagText: "Can't undo", item: asItem(s.path, "other", "dir") });
-        } else {
-          const cat = s.group === "Large & old" ? (meta.get(s.path)?.cat || "video") : SUGG_CAT[s.group] || "other";
-          h += row({ path: s.path, size: s.size, title: s.title, why: s.why, tag: s.safety, item: asItem(s.path, cat, s.kind ? "dir" : guessType(s.path)) });
-        }
+        if (s.action === "empty") { h += row({ path: s.path, size: back(s), title: BIN, tag: "review", tagText: "Can't undo", item: asItem(s.path, "other", "dir") }); continue; }
+        const cat = s.group === "Large & old" ? (meta.get(s.path)?.cat || "video") : s.safety === "keep" ? "app" : SUGG_CAT[s.group] || "other";
+        const item = asItem(s.path, cat, s.kind ? "dir" : guessType(s.path));
+        partsOf(s).forEach(x => x.path !== s.path && keepMeta(x.path, asItem(x.path, cat, "dir")));
+        const b = back(s), stays = s.size - b, less = stays > Math.max(10 * 2 ** 20, s.size * .05);
+        h += row({ path: s.path, size: s.act === "how" ? s.size : b, title: s.title, tag: s.safety, item, how: s.act === "how", app: s.app,
+          why: s.why, openApp: s.act === "how" ? "" : s.open,
+          sizeNote: less ? `of ${fmt(s.size)}` : "", sizeTip: less ? `Uses ${fmt(s.size)}. ${fmt(stays)} is shared with copies elsewhere, so removing this frees ${fmt(b)}` : "" });
       }
     }
     pane.innerHTML = h;
-    $("pick-safe").onclick = () => { safe.forEach(s => picked.set(s.path, s.size)); syncSelection(); };
+    $("pick-safe").onclick = () => { safe.forEach(s => partsOf(s).forEach(x => picked.set(x.path, backOf(x.path, x.size)))); syncSelection(); };
   }
 
   if (tab === "dupes") {
@@ -838,7 +911,7 @@ async function drawPaneBody(pane, live) {
     if (!dupes.groups.length) { pane.innerHTML = `<div class="empty">${Rumi.svg("happy", { size: 104 })}<span class="bignum">No copies</span></div>`; return; }
     // "select all" only takes copies outside code projects, where copies are usually on purpose
     const easy = ex.filter(g => !g.project), easyN = easy.reduce((a, g) => a + g.files.length - 1, 0);
-    let h = `<div class="intro"><span class="bignum num">${fmt(waste)}</span>in extra copies <span class="info" data-tip="Copies that share disk space aren't counted: removing them frees almost nothing">${ICON.info}</span>
+    let h = `<div class="intro"><span class="bignum num" data-tip="Taken by extra copies. Copies that share disk space aren't counted: removing them frees almost nothing">${fmt(waste)}</span>
       <div class="btns">${easyN ? `<button class="btn small" id="pick-dupes" data-tip="Keeps the oldest of each set">Select ${easyN} extra cop${easyN === 1 ? "y" : "ies"}${easy.length < ex.length ? " outside projects" : ""}</button>` : ""}</div></div>`;
     const card = (g, keepLabel) => {
       const f0 = g.files[0], it = { ...asItem(f0.path, g.cat), size: f0.size };
@@ -857,22 +930,22 @@ async function drawPaneBody(pane, live) {
       });
       return b + `</div>`;
     };
-    if (ex.length) { h += `<div class="grp"><span class="t">Identical</span><span class="s num">${fmt(waste)}</span></div>`; ex.slice(0, 150).forEach(g => h += card(g, "Keep")); }
-    if (sim.length) { h += `<div class="grp"><span class="t">Possible versions</span><span class="d">Check first</span></div>`; sim.slice(0, 100).forEach(g => h += card(g, "Newest")); }
+    if (ex.length) { h += grp("Identical", fmt(waste), "The same file, byte for byte. Rumi keeps the oldest of each"); ex.slice(0, 150).forEach(g => h += card(g, "Keep")); }
+    if (sim.length) { h += grp("Possible versions", "", "Same name, different contents. Check which one you need"); sim.slice(0, 100).forEach(g => h += card(g, "Newest")); }
     pane.innerHTML = h;
     const pd = $("pick-dupes"); if (pd) pd.onclick = () => { easy.forEach(g => g.files.slice(1).forEach(f => { picked.set(f.path, f.size); keepMeta(f.path, asItem(f.path, g.cat)); })); syncSelection(); };
   }
 
   if (tab === "biggest") {
     const list = overview.biggest, max = list[0]?.size || 1;
-    pane.innerHTML = `<div class="intro"><span class="bignum num">${fmt(list.reduce((a, f) => a + f.size, 0))}</span>in your ${list.length} largest files</div>` +
+    pane.innerHTML = `<div class="intro"><span class="bignum num" data-tip="Your ${list.length} largest files, added up">${fmt(list.reduce((a, f) => a + f.size, 0))}</span></div>` +
       list.map(f => row({ path: f.path, size: f.size, title: base(f.path), max, sizeNote: ago(f.mtime), item: { ...asItem(f.path, f.cat), size: f.size } })).join("");
   }
 
   if (tab === "folder") {
     const data = await getTree(current), node = data.node; if (!live()) return false;
     const kids = (node.children || []).filter(k => k.size > 0), max = kids[0]?.size || 1;
-    pane.innerHTML = `<div class="intro"><span class="bignum num">${fmt(node.size)}</span>in <b style="color:var(--ink)">${esc(rootName(data.crumbs.at(-1).name))}</b></div>` +
+    pane.innerHTML = `<div class="intro"><span class="bignum num">${fmt(node.size)}</span><span>in <b style="color:var(--ink)">${esc(rootName(data.crumbs.at(-1).name))}</b></span></div>` +
       kids.map(k => k.type === "rest"
         ? `<div class="row nochk"><span class="tile" style="--c:var(--c-other)">…</span><div class="nm"><div class="t" style="color:var(--dim)">${esc(k.name)}</div></div><div class="sz num" style="color:var(--dim)">${fmt(k.size)}</div></div>`
         : row({ path: k.path, size: k.size, title: label(k), max, item: k, open: k.type === "dir" && k.hasKids && !isApp(k),
@@ -886,9 +959,16 @@ $("pane").addEventListener("click", e => {
   const r = e.target.closest("[data-reveal]"), o = e.target.closest("[data-open]");
   if (r) { e.stopPropagation(); return reveal(r.dataset.reveal); }
   if (o) { e.stopPropagation(); return open(o.dataset.open); }
+  const hw = e.target.closest(".row[data-how]");
+  if (hw) { const s = (sugg || []).find(x => x.path === hw.dataset.how); if (s) showHow(s, hw); return; }
   if (e.target.closest(".btn")) return;
   const rw = e.target.closest(".row[data-row]");
-  if (rw) { const p = rw.dataset.row; toggle(p, +rw.dataset.size, e.target.tagName === "INPUT" ? e.target.checked : !picked.has(p)); popOnce(rw.querySelector("input")); }
+  if (rw) {
+    const p = rw.dataset.row, on = e.target.tagName === "INPUT" ? e.target.checked : !picked.has(p), s = tab === "cleanup" && suggFor(p);
+    if (s?.parts) { for (const x of s.parts) on ? picked.set(x.path, backOf(x.path, x.size)) : picked.delete(x.path); syncSelection(); }   // an app's caches go together
+    else toggle(p, +rw.dataset.size, on);
+    popOnce(rw.querySelector("input"));
+  }
 });
 $("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const changed = tab !== b.dataset.tab; if (changed) $("pane").scrollTop = 0; tab = b.dataset.tab; drawPane(changed); });
 
@@ -920,6 +1000,33 @@ function inspect(k, el) {
   let y = Math.min(Math.max(m, r.top), innerHeight - ph - m);
   p.style.left = x + "px"; p.style.top = y + "px";
 }
+/* ---------- how-to card: for what Rumi won't clear itself ----------
+   A tool's own cleanup can't be undone, and some things belong to an app. The card gives the steps and, where there is
+   one, the command to copy. Rumi doesn't run it. */
+function showHow(s, el) {
+  const p = $("insp");
+  if (inspEl === el && !p.hidden) return closeInsp();
+  closeInsp(); inspEl = el; el.classList.add("inspected");
+  const [first, ...rest] = s.how.steps, cmd = s.how.cmd;
+  p.innerHTML = `<div class="ih">${tile(asItem(s.path, s.safety === "keep" ? "app" : "dev", "dir"))}<div style="min-width:0"><div class="n">${esc(s.title)}</div><div class="s num">${fmt(s.size)}</div></div>
+      <button class="x" aria-label="Close"><svg class="i" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+    <ol class="steps"><li>${esc(first)}${cmd ? `<div class="cmd"><code>${esc(cmd)}</code><button class="btn small" data-a="copy">Copy</button></div>` : ""}</li>${rest.map(t => `<li>${esc(t)}</li>`).join("")}</ol>
+    <div class="a"><button class="btn" data-a="reveal">${ICON.finder}Show in Finder</button></div>`;
+  p.querySelector(".x").onclick = closeInsp;
+  p.querySelector('[data-a="reveal"]').onclick = () => reveal(s.path);
+  const cp = p.querySelector('[data-a="copy"]');
+  if (cp) cp.onclick = async () => { await api("/native/copy", { text: cmd }).catch(() => {}); cp.textContent = "Copied"; setTimeout(() => { if (cp.isConnected) cp.textContent = "Copy"; }, 1400); };
+  p.hidden = false;
+  const r = el.getBoundingClientRect(), pw = p.offsetWidth, ph = p.offsetHeight, m = 12;
+  p.style.left = Math.max(m, r.left - pw - m) + "px"; p.style.top = Math.min(Math.max(m, r.top - 8), innerHeight - ph - m) + "px";
+}
+// coming back to Rumi: an app may have been quit (or opened) meanwhile, which changes what can go
+addEventListener("focus", async () => {
+  if (tab !== "cleanup" || !sugg || !status?.ready) return;
+  const r = await api("/api/suggestions").catch(() => null), sig = l => l.map(x => x.path + "|" + (x.open || "")).join("\n");
+  if (r?.items && sugg && sig(r.items) !== sig(sugg)) { sugg = r.items; closeInsp(); drawPane(); }
+});
+
 /* ---------- viewer: photos and videos open right here, full size ----------
    The picture grows out of its cartridge; ← → step through the others in the same folder; Esc puts it back. */
 const VIEW_IMG = new Set("jpg jpeg png gif webp bmp svg heic heif tif tiff psd dng cr2 cr3 nef arw".split(" "));
@@ -1202,7 +1309,7 @@ $("kpop").addEventListener("click", e => {
   p._draw();
 });
 document.addEventListener("mousedown", e => { if (!$("kpop").hidden && !e.target.closest("#kpop, #chips")) closeKinds(); });
-document.addEventListener("mousedown", e => { if (!$("insp").hidden && !e.target.closest("#insp, #map .b.inspected")) closeInsp(); });
+document.addEventListener("mousedown", e => { if (!$("insp").hidden && !e.target.closest("#insp, #map .b.inspected, .row.inspected")) closeInsp(); });
 let toastTimer;
 function toast(html, ms = 6000) {
   const t = $("toast"); t.innerHTML = html; t.classList.remove("out"); t.hidden = false;
@@ -1210,15 +1317,83 @@ function toast(html, ms = 6000) {
   toastTimer = setTimeout(() => { t.classList.add("out"); toastTimer = setTimeout(() => { t.hidden = true; t.classList.remove("out"); }, 180); }, ms);
 }
 $("tray-clear").onclick = () => { picked.clear(); syncSelection(); };
-let cfItems = [];   // [{ path, size }] in the open confirm
-// The Trash is picked like anything else, but it's emptied, not moved: on its own the tray empties it (macOS asks first);
-// with other things picked, they move to the Trash and then the Empty Trash question follows.
+/* ---------- the Bin: it all happens on Rumi's screen ----------
+   Move to Bin brings up a big Rumi. Its screen asks; ticks the things off while Finder moves them; says how much is
+   now in the Bin and where that sits on the disk; and, after Empty Bin, how much was freed. The two keys under the
+   screen are the only buttons. Emptying can't be undone, so that key is press-and-hold: the face strains, the device
+   trembles, a tick quickens, and letting go early runs it all back. Nothing is called "freed" until the Bin is
+   emptied, because until then it isn't. macOS calls it Bin or Trash by language (BIN). */
+function binWords(w) {
+  if (!w || w === BIN) return;
+  BIN = w;
+  $("hint-trash-l").textContent = BIN.toLowerCase(); $("v-trash").dataset.tip = `Move to ${BIN} · ⌘⌫`;
+  syncSelection();
+}
+// a number that runs to its new value; with reduced motion it's just there
+const tween = (ms, fn) => new Promise(done => {
+  if (REDUCED.matches) { fn(1); return done(); }
+  const t0 = performance.now(), step = now => { const t = Math.min(1, (now - t0) / ms); fn(1 - Math.pow(1 - t, 3)); t < 1 ? requestAnimationFrame(step) : done(); };
+  requestAnimationFrame(step);
+});
+// small sounds, made on the spot, like an old handheld. Only when the Mac's own interface sounds are on.
+let AC = null;
+function beep(f, d = .06, when = 0, v = .03, type = "square") {
+  if (!status?.uiSounds) return;
+  try {
+    AC ||= new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume();
+    const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime + when; o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g).connect(AC.destination); o.start(t); o.stop(t + d + .02);
+  } catch {}
+}
+const CF = { state: "", items: [], things: [], bin: 0, disk: null, gain: null };
+const HOLD_MS = 950;
+const scAnim = (el, frames, opt) => el.animate(frames, REDUCED.matches ? { ...opt, duration: 1, delay: 0 } : opt);
+// the picture comes on, and goes off, the way an old screen does: through a bright line
+const scOn = () => scAnim($("sc-in"), [{ transform: "scale(.2, .03)", opacity: 0 }, { transform: "scale(1, .03)", opacity: 1, offset: .35 }, { transform: "none", opacity: 1 }], { duration: 420, easing: "cubic-bezier(.2,.7,.2,1)", fill: "forwards" });
+const scOff = () => scAnim($("sc-in"), [{ transform: "none", opacity: 1 }, { transform: "scale(1, .03)", opacity: 1, offset: .7 }, { transform: "scale(.2, .03)", opacity: 0 }], { duration: 190, easing: "ease-in", fill: "forwards" }).finished.catch(() => {});
+function scDraw(face, html, mode) { const box = $("sc-in"); box.className = "sc-in" + (mode ? " " + mode : ""); box.innerHTML = `<div class="sc-face" id="sc-face">${Rumi.face(face, 84)}</div>${html}`; }
+function scKeys(...keys) {   // [class, label, what it does]; the last one takes the focus
+  $("sc-keys").innerHTML = keys.map(([cls, text]) => `<button class="key ${cls}"><em></em><span class="lbl">${esc(text)}</span></button>`).join("");
+  const els = [...$("sc-keys").children];
+  keys.forEach(([, , fn], i) => { if (fn) els[i].onclick = fn; });
+  els.at(-1)?.focus();
+  return els;
+}
+// the disk as a row of blocks: used, what's in the Bin (blinking), free
+function scDisk(used, bin, total) {
+  const N = 26, b = Math.max(1, Math.round((bin / total) * N)), u = Math.max(0, Math.min(N - b, Math.round(((used - bin) / total) * N)));
+  return `<div class="sc-disk" id="sc-disk">${Array.from({ length: N }, (_, i) => `<i class="${i < u ? "dk-u" : i < u + b ? "dk-b" : ""}"></i>`).join("")}</div>`;
+}
+// one line per row on the Clean up list (an app's cache folders are one thing), biggest first
+function binThings(items) {
+  const seen = new Map();
+  for (const it of items) {
+    const s = suggFor(it.path), key = s ? s.path : it.path;
+    const t = seen.get(key) || { name: s ? s.title : label(meta.get(it.path) || asItem(it.path)), size: 0, paths: [], care: false };
+    t.size += it.size; t.paths.push(it.path); t.care ||= needsCare(it.path); seen.set(key, t);
+  }
+  return [...seen.values()].sort((a, b) => b.size - a.size);
+}
+let refreshT = 0;
+const refreshSoon = ms => { clearTimeout(refreshT); refreshT = setTimeout(() => refresh().catch(() => {}), ms); };
+function cfClose() {
+  const g = CF.gain; CF.gain = null; CF.state = "";
+  scOff().then(() => hide("confirm"));
+  if (g) setTimeout(() => { react("happy", 2200); headerGain(g[0], g[1]); }, 420);
+}
+// the free figure in the header counts up to what emptying gave back (once the screen is out of the way)
+function headerGain(f0, f1) {
+  if (f1 <= f0) return;
+  const b = () => document.querySelector("#hero-sub b");   // the header may be redrawn meanwhile
+  calmUntil = performance.now() + 1100;
+  tween(900, t => { const el = b(); if (el) { el.classList.add("gain"); el.textContent = fmt(f0 + (f1 - f0) * t) + " free"; } }).then(() => setTimeout(() => b()?.classList.remove("gain"), 2000));
+}
+// The Bin is picked like anything else, but it's emptied, not moved: on its own the tray opens the screen at Empty Bin;
+// with other things picked, they move first and the screen then offers to empty it.
 const TRASH = () => HOME + "/.Trash";
-let emptyAfter = false;
 $("tray-go").onclick = () => {
   const eff = effective(), rest = eff.filter(p => p !== TRASH());
-  emptyAfter = false;
-  if (eff.includes(TRASH())) { picked.delete(TRASH()); syncSelection(); if (!rest.length) return emptyTrash(); emptyAfter = true; }
+  if (eff.includes(TRASH())) { picked.delete(TRASH()); syncSelection(); if (!rest.length) return binScreen(); }
   openConfirm(rest.map(p => ({ path: p, size: picked.get(p) })));
 };
 // a set of identical files this would leave with no copy at all: every copy goes, and at least one was picked by
@@ -1228,75 +1403,67 @@ function wholeSet(paths, groups) {
   return (groups || []).find(g => g.kind === "exact" && g.files.length > 1 && g.files.some(f => own.has(f.path)) && g.files.every(f => has(f.path)));
 }
 const keepOneToast = g => toast(`<span>That's every copy of ${esc(base(g.files[0].path))}. Leave one out.</span>`, 5000);
+// 1 · the question. × on a line leaves that one out.
 function openConfirm(items) {
   closeInsp();
   const all = wholeSet(items.map(x => x.path), dupes?.groups); if (all) { hide("confirm"); return keepOneToast(all); }
-  cfItems = items;
-  const eff = items.map(x => x.path), size = new Map(items.map(x => [x.path, x.size])), total = items.reduce((s, x) => s + x.size, 0);
-  const care = eff.filter(needsCare);
-  $("cf-title").textContent = `Move ${eff.length} item${eff.length === 1 ? "" : "s"} (${fmt(total)}) to the Trash?`;
-  $("cf-warn").hidden = !care.length;
-  $("cf-warn").textContent = care.length ? `${care.length === eff.length ? (care.length === 1 ? "This is" : "These are") : `${care.length} ${care.length === 1 ? "is" : "are"}`} app data. Check the app doesn't need ${care.length === 1 ? "it" : "them"}.` : "";
-  $("cf-list").innerHTML = eff.map(p => `<li data-p="${esc(p)}">${tile(meta.get(p) || asItem(p))}<span data-tip="${esc(tilde(p))}">${esc(label(meta.get(p) || asItem(p)))}<em>${esc(whereOf(p))}</em></span>${needsCare(p) ? `<i class="tag review">Check</i>` : ""}<b class="num">${fmt(size.get(p))}</b><button class="rm" aria-label="Leave this out" data-tip="Leave out">${ICON.x}</button></li>`).join("");
-  $("cf-first").hidden = !NATIVE || (() => { try { return localStorage.getItem("rumi-trashed-before") === "1"; } catch { return false; } })();
-  show("confirm");
-  $("cf-yes").focus();
+  const fresh = $("confirm").hidden || $("confirm").classList.contains("closing");
+  const things = binThings(items), total = items.reduce((s, x) => s + x.size, 0), care = things.filter(t => t.care).length;
+  Object.assign(CF, { state: "ask", items, things, gain: null });
+  $("sc-undo").hidden = true; $("sc-led").classList.remove("on");
+  scDraw("scan", `<div class="sc-l">MOVE TO ${BIN.toUpperCase()}?</div><div class="sc-big num">${fmt(total)}</div>
+    <div class="sc-list">${things.map((t, i) => `<div class="sc-row${t.care ? " care" : ""}" data-i="${i}" data-tip="${esc(tilde(t.paths[0]) + (t.paths.length > 1 ? ` and ${t.paths.length - 1} more` : ""))}"><span>${esc(t.name)}</span><b class="num">${fmt(t.size)}</b><button class="sc-x" aria-label="Leave ${esc(t.name)} out" data-tip="Leave out">×</button></div>`).join("")}</div>
+    <div class="sc-l dim">${care ? `<span class="warn">${care} ${care === 1 ? "IS" : "ARE"} APP DATA</span> · ` : ""}YOU CAN PUT ${things.length === 1 ? "IT" : "THEM"} BACK</div>`);
+  $("sc-note").hidden = !NATIVE || (() => { try { return localStorage.getItem("rumi-trashed-before") === "1"; } catch { return false; } })();
+  if (fresh) { show("confirm"); scOn(); }
+  scKeys(["k-b", "Cancel", cfClose], ["k-a", `Move to ${BIN}`, trashConfirmed]);
 }
-$("cf-list").addEventListener("click", e => {
-  const b = e.target.closest(".rm"); if (!b) return;
-  const p = b.closest("li").dataset.p;
-  picked.delete(p); syncSelection();
-  const left = cfItems.filter(x => x.path !== p);
-  if (!left.length) { hide("confirm"); return; }
-  openConfirm(left);
+$("sc-in").addEventListener("click", e => {
+  const x = e.target.closest(".sc-x"); if (!x || CF.state !== "ask") return;
+  const t = CF.things[+x.parentNode.dataset.i]; beep(300, .05);
+  t.paths.forEach(p => picked.delete(p)); syncSelection();
+  const left = CF.items.filter(i => !t.paths.includes(i.path));
+  left.length ? openConfirm(left) : cfClose();
 });
 $("confirm").addEventListener("keydown", e => {
-  if (e.key === "Enter" && !e.target.closest("#cf-no, .rm")) { e.preventDefault(); $("cf-yes").click(); }
-  if (e.key === "Tab") { const f = [...$("confirm").querySelectorAll("button")]; const i = f.indexOf(document.activeElement);
-    e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus(); }
+  if (e.key !== "Tab") return;
+  const f = [...$("confirm").querySelectorAll("button")].filter(b => b.offsetParent), i = f.indexOf(document.activeElement);
+  e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length]?.focus();
 });
-$("cf-no").onclick = () => { emptyAfter = false; hide("confirm"); };
 let lastTrashed = [], trashing = false;
-$("cf-yes").onclick = async () => {
-  if (trashing || $("confirm").hidden || $("confirm").classList.contains("closing")) return;
-  trashing = true;
-  try { await trashConfirmed(); } finally { trashing = false; }
-};
 // drop picks for things that are gone, and for everything inside them
 function unpickUnder(paths) {
   for (const p of [...picked.keys()]) if (paths.some(g => p === g || p.startsWith(g + "/"))) picked.delete(p);
   syncSelection();
 }
+// 2 · moving: everything goes in one move; meanwhile the lines on show get their OK one by one
 async function trashConfirmed() {
-  hide("confirm");
-  const eff = cfItems.map(x => x.path), size = new Map(cfItems.map(x => [x.path, x.size]));
-  if (!dupes?.groups) { const d = await api("/api/dupes").catch(() => null), all = wholeSet(eff, d?.groups); if (all) return keepOneToast(all); }
-  toast("Moving to the Trash…", 60000);
-  let res;
-  try { res = await api("/api/trash", { paths: eff }); }
-  catch (e) { toast("Couldn't move these to the Trash: " + esc(e.message || e)); return; }
-  try { localStorage.setItem("rumi-trashed-before", "1"); } catch {}
-  const ok = res.results.filter(r => r.ok), bad = res.results.filter(r => !r.ok);
-  lastTrashed = ok.filter(r => r.trashed).map(r => ({ from: r.trashed, to: r.path }));
-  const freed = ok.reduce((s, r) => s + (size.get(r.path) || 0), 0);
-  unpickUnder(ok.map(r => r.path));
-  vGone(new Set(ok.map(r => r.path)));
-  if (ok.length && !REDUCED.matches) {
-    const gone = new Set(ok.map(r => r.path));
-    document.querySelectorAll("#map .b[data-path]").forEach(el => { if (gone.has(el.dataset.path)) el.classList.add("eject"); });
-    document.querySelectorAll("#pane .row[data-row]").forEach(rw => { if (!gone.has(rw.dataset.row)) return;
-      rw.style.height = rw.offsetHeight + "px"; void rw.offsetWidth; rw.classList.add("gone"); rw.style.height = "0px"; });
-    await wait(520);
-  }
-  await refresh().catch(() => {});
-  const why = bad.length ? ` · ${bad.length} skipped: ${esc(bad[0].error)}` : "";
-  if (ok.length) react("happy", 2600);
-  toast(ok.length ? `${Rumi.svg("happy", { size: 30, simple: true })}<span>${fmt(freed)} moved to the Trash${why}</span>
-    ${lastTrashed.length ? `<button class="btn small primary" id="toast-undo">Undo</button>` : ""}<button class="btn small ghost" id="toast-empty">Empty Trash…</button>`
-    : `<span>Nothing moved${why}</span>`, 20000);
-  const te = $("toast-empty"); if (te) te.onclick = emptyTrash;
-  const tu = $("toast-undo"); if (tu) tu.onclick = undoTrash;
-  if (emptyAfter) { emptyAfter = false; if (ok.length) emptyTrash(); }
+  if (trashing || CF.state !== "ask" || $("confirm").hidden) return;
+  trashing = true;
+  try {
+    const items = CF.items, eff = items.map(x => x.path), size = new Map(items.map(x => [x.path, x.size]));
+    if (!dupes?.groups) { const d = await api("/api/dupes").catch(() => null), all = wholeSet(eff, d?.groups); if (all) { hide("confirm"); return keepOneToast(all); } }
+    CF.state = "moving";
+    const box = $("sc-in"), rows = [...box.querySelectorAll(".sc-row")];
+    box.classList.add("busy"); box.querySelector(".sc-l").textContent = "MOVING…"; $("sc-keys").innerHTML = ""; $("sc-note").hidden = true;
+    const ticks = (async () => { for (const [i, r] of rows.slice(0, 6).entries()) { r.classList.add("ok"); beep(620 + i * 70, .045); await wait(REDUCED.matches ? 0 : 110); } })();
+    let res;
+    try { [res] = await Promise.all([api("/api/trash", { paths: eff }), ticks, wait(550)]); }
+    catch (e) { hide("confirm"); toast(`Couldn't move these to the ${BIN}: ` + esc(e.message || e)); return; }
+    try { localStorage.setItem("rumi-trashed-before", "1"); } catch {}
+    const ok = res.results.filter(r => r.ok), bad = res.results.filter(r => !r.ok), went = new Set(ok.map(r => r.path));
+    rows.forEach((r, i) => { const all = CF.things[i].paths.every(p => went.has(p)); r.classList.toggle("ok", all); r.classList.toggle("no", !all); });
+    lastTrashed = ok.filter(r => r.trashed).map(r => ({ from: r.trashed, to: r.path }));
+    const moved = ok.reduce((s, r) => s + (size.get(r.path) || 0), 0);
+    unpickUnder([...went]);
+    vGone(went);
+    const skipped = bad.length ? `${bad.length} skipped: ${bad[0].error}` : "";
+    if (!ok.length) { hide("confirm"); toast(`<span>Nothing moved · ${esc(skipped)}</span>`, 12000); return refresh().catch(() => {}); }
+    // the screen says so first, with nothing else going on; the map and lists are redrawn behind it once it has settled
+    status = await api("/api/status").catch(() => status);
+    await binScreen(moved, skipped);
+    refreshSoon(1500);
+  } finally { trashing = false; }
 }
 async function undoTrash() {
   const items = lastTrashed; lastTrashed = [];
@@ -1307,15 +1474,79 @@ async function undoTrash() {
   toast(r.back ? `${Rumi.svg("wink", { size: 30, simple: true })}<span>Put back ${r.back} item${r.back === 1 ? "" : "s"}${r.error ? " · " + esc(r.error) : ""}</span>` : "Couldn't put them back: " + esc(r.error || "unknown problem"));
   const s = await api("/api/status").catch(() => null); if (s) { status = s; drawFresh(); watch(); }
 }
-async function emptyTrash() {
-  const msg = NATIVE ? "Empty the Trash?|Deletes everything in it for good, not just what Rumi moved.|Empty Trash"
-                     : "Empty the Trash? Deletes everything in it for good, not just what Rumi moved.";
-  if (!confirm(msg)) return;
-  toast("Emptying…", 60000);
-  const r = await api("/api/empty-trash", {}).catch(e => ({ ok: false, error: e.message || String(e) }));
-  await refresh().catch(() => {});
-  if (r.ok) react("happy", 2600);
-  toast(r.ok ? `${Rumi.svg("happy", { size: 30, simple: true })}<span>Trash emptied</span>` : "Finder couldn't empty the Trash: " + esc(r.error));
+// 3 · in the Bin, not freed yet. After a move: Done, Empty Bin, and a small Undo under the device.
+// Opened by itself (the Bin picked on its own): what's in the Bin, with Cancel and Empty Bin.
+async function binScreen(moved = 0, skipped = "") {
+  const fresh = $("confirm").hidden || $("confirm").classList.contains("closing"), d = status.disk;
+  const bin = Math.max(status.binSize || 0, moved) + (status.practice && status.binSize < moved ? status.binSize : 0);
+  Object.assign(CF, { state: "bin", bin, disk: { used: d.used, total: d.total }, gain: null });
+  $("sc-note").hidden = true; $("sc-led").classList.remove("on");
+  if (!fresh) await scOff();
+  scDraw(moved ? "happy" : "idle", `<div class="sc-l">${moved ? "MOVED TO" : "IN"} THE ${BIN.toUpperCase()}</div><div class="sc-big num" id="sc-big">${fmt(moved || bin)}</div>
+    ${scDisk(d.used, bin, d.total)}<div class="sc-l dim">STILL ON YOUR DISK · FREE <b class="num">${fmt(d.free)}</b></div>
+    ${skipped ? `<div class="sc-l warn small">${esc(skipped)}</div>` : ""}<div class="sc-meter"><em id="sc-em"></em></div><div class="sc-l blink" id="sc-hold">HOLD TO EMPTY</div>`);
+  if (fresh) show("confirm");
+  scOn(); calmUntil = performance.now() + 1300;
+  if (moved) { beep(660, .07); beep(880, .1, .08); const big = $("sc-big"); tween(700, t => { big.textContent = fmt(moved * t); }); }
+  const un = $("sc-undo"); un.hidden = !(moved && lastTrashed.length); un.onclick = () => { CF.state = ""; hide("confirm"); undoTrash(); };
+  const [, hold] = scKeys(["k-b", moved ? "Done" : "Cancel", cfClose], ["k-a", `Empty ${BIN}`]);
+  hold.dataset.tip = `Hold to empty. Everything in the ${BIN} is deleted for good`;
+  const t = { duration: HOLD_MS, easing: "linear", fill: "both" };
+  const shake = Array.from({ length: 13 }, (_, i) => ({ transform: `translateX(${(i === 12 ? 0 : (i % 2 ? -1 : 1) * 2.6 * i / 12).toFixed(2)}px)` }));
+  holdKey(hold, REDUCED.matches ? [] : [
+    $("sc-em").animate([{ transform: "translateX(-100%)" }, { transform: "none" }], t),
+    $("sc-face").animate([{ transform: "none" }, { transform: "scale(1.12, .5) translateY(4px)" }], { ...t, easing: "cubic-bezier(.5,0,.8,.5)" }),
+    $("sc").animate(shake, t),
+  ], emptyBin);
+}
+// Press and hold drives every animation in `anims` forward together, with a tick that quickens; letting go runs them
+// back; reaching the end fires. A plain click says to hold.
+function holdKey(btn, anims, done) {
+  const fill = btn.querySelector("em").animate([{ transform: "translateX(-100%)" }, { transform: "translateX(28px)" }], { duration: HOLD_MS, easing: "linear", fill: "both" });
+  const all = [fill, ...anims]; all.forEach(a => a.pause());
+  const lbl = btn.querySelector(".lbl"), text = lbl.textContent; let fired = false, t0 = 0, nt = 0, tk = 0;
+  const tick = () => { const p = Math.min(1, (performance.now() - t0) / HOLD_MS); beep(700 + p * 500, .022, 0, .01, "triangle"); tk = setTimeout(tick, 125 - 80 * p); };
+  const start = () => { if (fired || btn.classList.contains("holding")) return; t0 = performance.now(); btn.classList.add("holding"); all.forEach(a => { a.updatePlaybackRate(1); a.play(); }); clearTimeout(tk); tick(); };
+  const stop = () => {
+    if (fired || !btn.classList.contains("holding")) return;
+    btn.classList.remove("holding"); clearTimeout(tk); all.forEach(a => { if (a.currentTime > 0) a.updatePlaybackRate(-2.4); else a.pause(); });
+    if (performance.now() - t0 < 320) {   // a click, not a hold: say what to do
+      lbl.textContent = "Hold to empty"; btn.classList.remove("nudge"); void btn.offsetWidth; btn.classList.add("nudge");
+      clearTimeout(nt); nt = setTimeout(() => { if (!fired && lbl.isConnected) lbl.textContent = text; btn.classList.remove("nudge"); }, 1600);
+    }
+  };
+  fill.onfinish = () => { if (fill.playbackRate > 0 && !fired) { fired = true; clearTimeout(tk); btn.classList.remove("holding"); done(); } };
+  btn.addEventListener("pointerdown", e => { if (e.button === 0) start(); });
+  ["pointerup", "pointerleave", "pointercancel", "blur"].forEach(t => btn.addEventListener(t, stop));
+  btn.addEventListener("keydown", e => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); start(); } });
+  btn.addEventListener("keyup", e => { if (e.key === " " || e.key === "Enter") stop(); });
+}
+// 4 · freed: the picture flips, the Bin's blocks pop, the stars come out
+async function emptyBin() {
+  const f0 = status.disk.free, bin = CF.bin, dk = CF.disk;
+  CF.state = "emptying"; clearTimeout(refreshT); $("sc-keys").innerHTML = ""; $("sc-undo").hidden = true; $("sc-hold").textContent = "EMPTYING…";
+  const [r] = await Promise.all([api("/api/empty-trash", {}).catch(e => ({ ok: false, error: e.message || String(e) })), wait(300)]);
+  lastTrashed = [];
+  status = await api("/api/status").catch(() => status);
+  refreshSoon(1700);   // behind the screen, after the numbers have run
+  if ($("confirm").hidden || CF.state !== "emptying") { if (!r.ok) toast(`Couldn't empty the ${BIN}: ` + esc(r.error)); return; }
+  await scOff();
+  if (!r.ok) {
+    CF.state = "bin";
+    scDraw("empty", `<div class="sc-l warn">COULDN'T EMPTY THE ${BIN.toUpperCase()}</div><div class="sc-l dim small">${esc(r.error)}</div>`);
+    scOn(); scKeys(["k-a wide", "Done", cfClose]); return;
+  }
+  const f1 = status.practice ? f0 + bin : Math.max(f0, status.disk.free);
+  Object.assign(CF, { state: "freed", gain: [f0, f1] });
+  scDraw("happy", `<div class="sc-l ok">FREED</div><div class="sc-big num ok" id="sc-big"></div>${scDisk(dk.used, bin, dk.total)}<div class="sc-l dim">FREE <b class="num" id="sc-free"></b></div>`, "done");
+  scOn(); $("sc-led").classList.add("on"); calmUntil = performance.now() + 1500;
+  [523, 659, 784, 1047].forEach((f, i) => beep(f, .11, i * .09));
+  if (!REDUCED.matches) [...$("sc-stars").children].forEach((s, i) => s.animate([{ transform: "scale(0) rotate(-40deg)", opacity: 0 }, { transform: "scale(1.15) rotate(10deg)", opacity: 1, offset: .45 }, { transform: "scale(1) rotate(0)", opacity: 1, offset: .7 }, { transform: "scale(0) rotate(30deg)", opacity: 0 }],
+    { duration: 1500, delay: 250 + i * 110, easing: "cubic-bezier(.3,1.4,.5,1)", fill: "both" }));
+  [...$("sc-disk").querySelectorAll(".dk-b")].forEach((b, i) => setTimeout(() => { b.classList.add("pop"); beep(990 + i * 60, .04, 0, .02); }, 520 + i * 90));
+  scKeys(["k-a wide", "Done", cfClose]);
+  const big = $("sc-big"), free = $("sc-free");
+  await tween(900, t => { big.textContent = fmt(bin * t); free.textContent = fmt(f0 + (f1 - f0) * t); });
 }
 /* ---------- macOS keeps this: the space outside Home and Applications ---------- */
 // what the locked cartridge prints on its label: the biggest parts once they're measured
@@ -1405,7 +1636,6 @@ const sizeOf = p => meta.get(p)?.size || picked.get(p) || +(document.querySelect
 const keepFolder = p => !p || p === HOME || (status?.roots || []).includes(p) || !!protectedPlace(p) ||
   ["Library", "Desktop", "Documents", "Downloads", "Pictures", "Movies", "Music", ".Trash"].some(x => p === HOME + "/" + x);
 function trashOne(p) {
-  emptyAfter = false;
   const k = meta.get(p) || asItem(p), owner = ownerOf(p);
   if (owner) return toast(`<span>Part of ${esc(owner)}, so it stays</span>`, 4000);
   if (keepFolder(p)) return toast(`<span>${esc(label(k) || p)} stays. Open it to pick what's inside.</span>`, 4000);
@@ -1423,7 +1653,7 @@ async function contextMenu(p) {
     { sep: true },
     { id: "pick", title: picked.has(p) ? "Remove from Clean up" : "Add to Clean up", enabled: !owner },
     { sep: true },
-    { id: "trash", title: "Move to Trash…", key: "\b", cmd: true, enabled: !owner },
+    { id: "trash", title: `Move to ${BIN}…`, key: "\b", cmd: true, enabled: !owner },
   ] }).catch(() => null);
   switch (r?.chosen) {
     case "open": if (folder) { closeInsp(); open(p, document.querySelector(`#map .b[data-path="${CSS.escape(p)}"]`)); } else api("/native/open", { path: p }); break;
@@ -1451,7 +1681,7 @@ if (NATIVE) $("hint-ql").hidden = $("hint-trash").hidden = false;
 function redraw() { if (treeCache.has(current)) getView(current).then(x => drawMap(x.node)).catch(() => {}); }
 
 async function refresh() {
-  treeCache = new Map(); filterCache = new Map(); sugg = null; dupes = null; dupesRev = null;
+  treeCache = new Map(); filterCache = new Map(); sugg = null; dupes = null; dupesRev = null; frees.clear(); freesAsked.clear();
   [status, overview] = await Promise.all([api("/api/status"), api("/api/overview")]); loadKinds();
   drawHeader();
   const p = await nearestFolder(current);
@@ -1482,7 +1712,7 @@ addEventListener("keydown", e => {
   if (e.target.closest && e.target.closest("input, select, textarea")) return;
   if (e.metaKey && (e.key === "f" || e.key === "k")) { e.preventDefault(); if (!dialogUp() && !V.open) openFind(); return; }
   if (e.key === "Escape" && !$("kpop").hidden) { closeKinds(); return; }
-  if (e.key === "Escape" && !$("confirm").hidden) { emptyAfter = false; hide("confirm"); return; }
+  if (e.key === "Escape" && !$("confirm").hidden) { if (CF.state !== "moving" && CF.state !== "emptying") cfClose(); return; }
   if (e.key === "Escape" && !$("hidden").hidden) { hide("hidden"); return; }
   // behind a dialog the map stays put: Backspace, ⌘[ ⌘] and ⌘↑ do nothing (the dialog's own keys still work)
   if (dialogUp()) { if (e.key === "Backspace" || (e.metaKey && /^(\[|\]|ArrowUp)$/.test(e.key))) e.preventDefault(); return; }
@@ -1529,7 +1759,8 @@ async function poll() {
     $("scan-msg").textContent = "Quit Rumi and open it again.";
     return;
   }
-  HOME = status.home;
+  HOME = status.home; binWords(status.bin);
+  if (status.practice && !$("practice")) document.body.insertAdjacentHTML("beforeend", `<div id="practice">Practice copy · nothing is really moved</div>`);
   if (status.loading) { setTimeout(poll, 60); return; }   // last launch's map is being read; it takes a moment
   if (status.access === "needed") { showAccessCard(); hide("scanning"); setTimeout(poll, 700); return; }
   hide("access");
@@ -1588,7 +1819,7 @@ async function watch() {
 }
 // Fresh scan finished: redraw where the user is, without the zoom animation. If that folder is gone, step up to one that exists.
 async function softRefresh() {
-  treeCache = new Map(); filterCache = new Map(); sugg = null;
+  treeCache = new Map(); filterCache = new Map(); sugg = null; frees.clear(); freesAsked.clear();
   try { overview = await api("/api/overview"); } catch {}
   loadKinds();
   drawHeader(); drawDenied();
@@ -1611,7 +1842,7 @@ function badge(id, text) {
   el.classList.remove("tick"); void el.offsetWidth; el.classList.add("tick");
 }
 function setBadges() {
-  if (sugg) { const t = sugg.reduce((a, s) => a + s.size, 0); badge("b-cleanup", t ? fmt(t) : " "); }
+  if (sugg) { const t = sugg.filter(s => s.act !== "how").reduce((a, s) => a + partsOf(s).reduce((n, x) => n + backOf(x.path, x.size), 0), 0); badge("b-cleanup", t ? fmt(t) : " "); }
   if (dupes?.groups && (dupes.status === "done" || dupes.groups.length)) { const w = dupes.groups.filter(g => g.kind === "exact").reduce((a, g) => a + g.waste, 0); badge("b-dupes", w ? fmt(w) : "none"); }
 }
 // redraw only when the map's size really changed (the observer also fires once at start, which used to cut the intro short)

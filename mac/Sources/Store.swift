@@ -211,6 +211,10 @@ final class Store {
     var fromSaved = false
     /// Paths the Clean up list currently suggests (Move to Trash allows these even inside an app's data).
     var suggested = Set<String>()
+    /// For those that belong to an app: which one (a bundle id or folder name), so a trash can check it isn't open.
+    var suggestedApp: [String: String] = [:]
+    /// Homebrew's old versions, measured once per scan (they're outside the mapped folders).
+    var brewKept: (scan: Double, cellar: String, size: Int64)?
     /// "needed" until Full Disk Access is granted or skipped.
     var access = "needed"
     /// When the scan the map is compared against was made (0: nothing to compare with yet), and the disk's used space
@@ -223,6 +227,9 @@ final class Store {
     /// (left out of its groups). Guarded by `lock`.
     private var scanTrash = TrashLog()
     var dupesTrash = TrashLog()
+    /// How much went to the Trash since the last scan. The map takes things out when they're trashed but doesn't put them
+    /// in its Trash folder, so the Trash's size is the scanned size plus this. Guarded by `lock`.
+    var trashedSince: Int64 = 0
 
     private var seenLinks = Set<UInt64>()
     private let linkLock = NSLock()
@@ -323,6 +330,7 @@ final class Store {
         denied = den
         baselineAt = base.at; baseUsed = base.used; churnStale = false
         let edited = replayTrash()   // things trashed while this scan ran may still be in the new tree
+        trashedSince = 0             // the new map has the Trash as it is now
         dupes.status = "running"   // the duplicate check starts right below; unload() waits for it
         scanning = false
         fromSaved = false
@@ -376,7 +384,7 @@ final class Store {
         lock.lock()
         guard root != nil, !scanning, !loading, dupes.status != "running" else { lock.unlock(); return false }
         let old = (root, index, bigFiles, dupes.groups)
-        root = nil; index = [:]; bigFiles = []; dupes.groups = []; dupes.status = "idle"; suggested = []
+        root = nil; index = [:]; bigFiles = []; dupes.groups = []; dupes.status = "idle"; suggested = []; suggestedApp = [:]
         unloaded = true
         lock.unlock()
         withExtendedLifetime(old) {}
@@ -452,6 +460,7 @@ final class Store {
         lock.lock(); defer { lock.unlock() }
         if scanning { scanTrash.emptied = true }
         if dupesTrash.on { dupesTrash.emptied = true }
+        trashedSince = 0
         emptyTrashNode()
     }
 

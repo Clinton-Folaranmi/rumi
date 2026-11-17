@@ -6,6 +6,9 @@ import WebKit
 /// Dev hooks (the page served live from RUMI_WEB_ROOT, the Web Inspector): only with the devTools setting, in a test run
 /// (--snapshot), or from scripts/run.sh (--dev).
 let DEV_MODE = UserDefaults.standard.bool(forKey: "devTools") || CommandLine.arguments.contains("--snapshot") || CommandLine.arguments.contains("--dev")
+/// A practice copy (scripts/practice.sh) never moves or deletes anything: the Trash requests are answered "done", so
+/// the Bin card can be tried, and tested, as often as you like.
+let REVIEW = DEV_MODE && ProcessInfo.processInfo.environment["RUMI_REVIEW"] == "1"
 
 /// New every launch and handed only to the app's own page (main.swift's boot script): every /api/ request must carry it.
 let SESSION_TOKEN = UUID().uuidString + UUID().uuidString
@@ -144,17 +147,29 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
         switch path {
         case "/api/trash":
             let paths = body["paths"] as? [String] ?? []
+            if REVIEW { return done(["results": paths.map { ["path": $0, "ok": true, "error": "", "trashed": "/practice"] }]) }
             DispatchQueue.global(qos: .userInitiated).async { done(trashJSON(paths)) }
         case "/api/reveal":
             // in a new Finder window on the screen this was asked from (the panel's, or the main window's)
             done(["ok": !showInFinder(body["path"] as? String ?? "", select: true, on: message.webView?.window?.screen).isEmpty])
+        case "/api/frees":
+            // what removing this would really give back (shared space isn't counted). Asked for the Clean up list, quietly
+            // ("low"), and for what's picked, right away. A big folder takes a few seconds
+            guard let p = pathInRoots(body["path"] as? String ?? "") else { return done(["error": "outside the scanned folders"]) }
+            let size = (body["size"] as? NSNumber)?.int64Value ?? 0, low = body["low"] as? Bool ?? false
+            DispatchQueue.global(qos: low ? .utility : .userInitiated).async {
+                let s = Frees.of(p, size: size, workers: low ? 2 : 4)
+                done(["uses": s.uses, "frees": s.frees])
+            }
         case "/api/put-back":
             let items = (body["items"] as? [[String: Any]] ?? []).map { $0.compactMapValues { $0 as? String } }
+            if REVIEW { return done(["ok": true, "back": items.count, "error": ""]) }
             DispatchQueue.global(qos: .userInitiated).async { done(putBackJSON(items)) }
         case "/native/title":
             if let t = body["title"] as? String { NSApp.mainWindow?.title = t.isEmpty ? "Rumi" : t; NSApp.windows.first?.title = t.isEmpty ? "Rumi" : t }
             done(["ok": true])
         case "/api/empty-trash":
+            if REVIEW { return done(["ok": true, "error": ""]) }
             DispatchQueue.global(qos: .userInitiated).async { done(emptyTrashJSON()) }
         case "/api/rescan":
             S.startScan(); done(["ok": true])
@@ -195,6 +210,9 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
                 else { NSWorkspace.shared.open(URL(fileURLWithPath: p)) }
             }
             done(["ok": true])
+        case "/native/copy":   // a how-to's command, to paste into Terminal
+            NSPasteboard.general.clearContents()
+            done(["ok": NSPasteboard.general.setString(body["text"] as? String ?? "", forType: .string)])
         case "/native/quick-close":   // the menu-bar search panel: Esc, or a result was opened
             QuickSearch.shared.hide(); done(["ok": true])
         case "/native/show-in-rumi":   // the panel's ⌥↵: bring the main window forward and show this on the map

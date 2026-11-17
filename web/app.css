@@ -149,7 +149,6 @@ aside { border-left: 1px solid var(--line); background: var(--panel); display: g
 .grp { padding: 18px 18px 6px; display: flex; align-items: baseline; gap: 8px; }
 .grp .t { font-weight: 650; font-size: 13px; }
 .grp .s { color: var(--dim); font-size: 12px; }
-.grp .d { color: var(--faint); font-size: 11.5px; margin-left: auto; }
 .row { display: grid; grid-template-columns: 20px 38px 1fr auto; gap: 0 11px; padding: 8px 18px; align-items: center; position: relative; cursor: pointer; }
 .row:hover { background: var(--hover); }
 .row.nochk { grid-template-columns: 38px 1fr auto; cursor: default; }
@@ -208,11 +207,6 @@ aside { border-left: 1px solid var(--line); background: var(--panel); display: g
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 28px 30px; width: min(480px, 92vw); box-shadow: var(--shadow); }
 .modal h2 { margin: 0 0 6px; font-size: 19px; letter-spacing: -.02em; }
 .modal p { margin: 0 0 16px; color: var(--dim); }
-.modal ul { margin: 0 0 18px; padding: 0; list-style: none; max-height: 240px; overflow: auto; border-top: 1px solid var(--line); }
-.modal li { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
-.modal li .tile { width: 28px; height: 28px; border-radius: 7px; font-size: 8px; }
-.modal li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
-.modal .acts { display: flex; justify-content: flex-end; gap: 8px; }
 .scan { text-align: center; width: min(520px, 92vw); }
 .scan h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--dim); }
 .scan .count { font-size: 44px; font-weight: 700; letter-spacing: -.04em; margin: 4px 0 2px; }

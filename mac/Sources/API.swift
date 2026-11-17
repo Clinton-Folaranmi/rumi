@@ -18,6 +18,14 @@ func diskInfo() -> [String: Any] {
     return ["total": total, "used": total - free, "free": free, "freeNow": min(now, free), "purgeable": max(0, free - now)]
 }
 
+/// What this Mac calls the Trash. macOS says "Bin" in British, Australian and Indian English (and gives British English
+/// to most other English regions) and "Trash" elsewhere; this asks which of Finder's languages the person gets.
+let BIN: String = {
+    let finder = Bundle(path: "/System/Library/CoreServices/Finder.app")?.localizations ?? []
+    let lang = Bundle.preferredLocalizations(from: finder, forPreferences: Locale.preferredLanguages).first ?? "en"
+    return ["en_GB", "en_AU", "en_IN", "en-GB", "en-AU", "en-IN"].contains(lang) ? "Bin" : "Trash"
+}()
+
 extension Store {
     func statusJSON() -> [String: Any] {
         progressLock.lock(); let seen = filesSeen, cur = current; progressLock.unlock()
@@ -30,7 +38,8 @@ extension Store {
             // a saved map counts as ready: the page shows it while a rescan runs quietly behind it
             "ready": root != nil, "loading": loading, "refreshing": scanning && root != nil, "saved": fromSaved,
             "scannedAt": root != nil ? finished : 0, "generation": generation, "since": root != nil ? baselineAt : 0,
-            "disk": disk, "roots": roots, "home": HOME,
+            "disk": disk, "roots": roots, "home": HOME, "bin": BIN, "binSize": (index[HOME + "/.Trash"]?.size ?? 0) + trashedSince, "practice": REVIEW,
+            "uiSounds": UserDefaults.standard.object(forKey: "com.apple.sound.uiaudio.enabled") as? Bool ?? true,   // the Mac's "play user interface sound effects"
             "denied": denied.count, "access": access,
             "dupes": ["status": dupes.status, "progress": dupes.progress, "total": dupes.total, "rev": dupes.rev],
         ]
@@ -104,54 +113,95 @@ extension Store {
 
     // MARK: suggestions
 
+    /// Folders that browsers and apps built on them keep caches in, inside the app's own data folder.
+    private static let cacheFolders: Set<String> = ["Cache", "Code Cache", "GPUCache", "CachedData", "CacheStorage", "ScriptCache", "DawnCache",
+        "DawnGraphiteCache", "DawnWebGPUCache", "GrShaderCache", "GraphiteDawnCache", "ShaderCache", "component_crx_cache"]
+    /// Tools' folders inside ~/.cache that only hold downloads the tool fetches again by itself.
+    private static let toolCaches: Set<String> = ["pip", "uv", "yarn", "bun", "deno", "go-build", "node-gyp", "electron", "electron-builder", "typescript", "turbo"]
+
+    /// The Clean up list. Each item is one of two things Rumi can do with it:
+    ///   - move it to the Trash (you can undo): the default
+    ///   - show you how ("act": "how"): a tool's own cleanup command, which can't be undone, or something Rumi won't touch
+    /// "safety" is safe, review (Check first) or keep (Won't touch). "open" names the app that's running and has to quit
+    /// first. "parts" lists the folders when one row stands for several.
     func suggestionsJSON() -> (Int, [String: Any]) {
         let now = Date().timeIntervalSince1970
         var out: [[String: Any]] = []
-        func add(_ group: String, _ title: String, _ why: String, _ path: String, _ size: Int64, _ safety: String, _ extra: [String: Any] = [:]) {
-            guard size >= 20 * 1024 * 1024 else { return }
+        var appKey: [String: String] = [:]     // path → the app it belongs to, as a bundle id or a folder name
+        var titleID: [Int: String] = [:]       // rows whose title is an app's bundle id, named after the lock is let go
+        @discardableResult func add(_ group: String, _ title: String, _ why: String, _ path: String, _ size: Int64, _ safety: String, _ extra: [String: Any] = [:]) -> Bool {
+            guard size >= 20 * 1024 * 1024 else { return false }
             var d: [String: Any] = ["group": group, "title": title, "why": why, "path": path, "size": size, "safety": safety]
             for (k, v) in extra { d[k] = v }
             out.append(d)
+            return true
         }
-        // The tree is read under the lock (a trash edits it). Only the slow lookups (app names, last-used dates) wait
-        // until after: cache rows get their titles then, and apps are added last.
+        func how(_ title: String, _ why: String, _ path: String, _ size: Int64, _ safety: String, cmd: String? = nil, steps: [String]) {
+            var h: [String: Any] = ["steps": steps]
+            if let c = cmd { h["cmd"] = c }
+            add("How to", title, why, path, size, safety, ["kind": "dir", "act": "how", "how": h])
+        }
+        // The tree is read under the lock (a trash edits it). The slow lookups (app names, what's running, last-used dates)
+        // wait until after.
         lock.lock()
         guard root != nil else { lock.unlock(); return (409, ["error": "not ready"]) }
         let idx = index, big = bigFiles
         func get(_ rel: String) -> Dir? { idx[HOME + "/" + rel] }
 
-        var cacheIDs: [String] = []
+        // caches: ~/Library/Caches, one row per app
         if let caches = get("Library/Caches") {
             let mine: Set<String> = ["com.clinton.rumi", "StorageMap", "storage-map"]
-            for ch in caches.dirs.sorted(by: { $0.size > $1.size }) where !mine.contains(ch.name) {
-                if cacheIDs.count >= 25 { break }
-                let n = out.count
-                add("Caches", ch.name, "", ch.path, ch.size, "safe", ["kind": "dir"])
-                if out.count > n { cacheIDs.append(ch.name) }
+            var n = 0
+            for ch in caches.dirs.sorted(by: { $0.size > $1.size }) where !mine.contains(ch.name) && n < 25 {
+                if add("Caches", ch.name, "", ch.path, ch.size, "safe", ["kind": "dir"]) {
+                    n += 1; titleID[out.count - 1] = ch.name
+                    if !ch.name.hasPrefix("com.apple.") { appKey[ch.path] = ch.name }   // macOS's own aren't an app you can quit
+                }
             }
         }
-        for (rel, label) in [(".cache", ".cache"), (".npm", "npm cache"), ("Library/pnpm", "pnpm store"), (".gradle/caches", "Gradle cache")] {
-            if let n = get(rel) { add("Caches", label, "", n.path, n.size, "safe", ["kind": "dir"]) }
+        // caches that apps keep inside their own data folder (browsers, and apps built on one). They join the app's row
+        // above when it has one, once names are known
+        var inData: [(name: String, parts: [[String: Any]], size: Int64)] = []
+        if let support = get("Library/Application Support") {
+            for app in support.dirs where app.name != "com.clinton.rumi" {
+                var parts: [Dir] = []
+                func find(_ d: Dir, _ depth: Int) {
+                    for ch in d.dirs {
+                        if Store.cacheFolders.contains(ch.name) { parts.append(ch) } else if depth < 4 { find(ch, depth + 1) }
+                    }
+                }
+                find(app, 1)
+                parts = parts.filter { $0.size >= 1 << 20 }.sorted { $0.size > $1.size }
+                guard !parts.isEmpty else { continue }
+                inData.append((app.name.prefix(1).uppercased() + app.name.dropFirst(), parts.map { ["path": $0.path, "size": $0.size] }, parts.reduce(0) { $0 + $1.size }))
+                for p in parts { appKey[p.path] = app.name }
+            }
         }
-        // A virtual machine an app keeps in its data folder (a disk image of 2 GB or more) is often the biggest single thing
-        // there, and some apps fetch it again when it's gone. Offered as the folder it sits in, one level into the app's own.
-        let appData = HOME + "/Library/Application Support/"
-        var machines = Set<String>()
-        for b in big where b.alloc >= Int64(2) << 30 && b.path.hasPrefix(appData)
-            && ["img", "qcow2", "vmdk", "vdi", "raw"].contains(fileExt((b.path as NSString).lastPathComponent)) {
-            let parts = b.path.dropFirst(appData.count).split(separator: "/")
-            if parts.count >= 3 { machines.insert(appData + parts[0] + "/" + parts[1]) }   // app / folder / … / image
+        // sandboxed apps keep theirs in a container
+        if let boxes = get("Library/Containers") {
+            for box in boxes.dirs {
+                guard let c = idx[box.path + "/Data/Library/Caches"] else { continue }
+                if add("Caches", box.name, "", c.path, c.size, "safe", ["kind": "dir"]) {
+                    titleID[out.count - 1] = box.name
+                    if !box.name.hasPrefix("com.apple.") { appKey[c.path] = box.name }
+                }
+            }
         }
-        for p in machines.sorted() {
-            guard let d = idx[p] else { continue }
-            let app = ((p as NSString).deletingLastPathComponent as NSString).lastPathComponent
-            add("Caches", "\(app)'s virtual machine", "Quit \(app) first · it may download again", d.path, d.size, "review", ["kind": "dir"])
+        // ~/.cache: each tool's folder by itself. Only the ones known to refill on their own are Safe.
+        if let dot = get(".cache") {
+            for ch in dot.dirs {
+                let known = Store.toolCaches.contains(ch.name)
+                add("Caches", "\(ch.name) cache", known ? "Downloaded again when needed" : "A tool's downloads · see what's inside", ch.path, ch.size, known ? "safe" : "review", ["kind": "dir"])
+            }
         }
+        if let n = get(".npm/_cacache") ?? get(".npm") { add("Caches", "npm cache", "Downloaded again when needed", n.path, n.size, "safe", ["kind": "dir"]) }
+        if let n = get(".gradle/caches") { add("Caches", "Gradle cache", "Downloaded again when needed", n.path, n.size, "safe", ["kind": "dir"]) }
+        if let n = get(".cargo/registry") { add("Caches", "Rust package downloads", "Downloaded again when needed", n.path, n.size, "safe", ["kind": "dir"]) }
+
         for (rel, label, why) in [
             ("Library/Developer/Xcode/DerivedData", "Xcode build files", "Rebuilt on your next build"),
             ("Library/Developer/Xcode/iOS DeviceSupport", "Old iPhone debugging files", "Come back when you plug in a device"),
             ("Library/Developer/Xcode/Archives", "Xcode archives", "Keep any you still ship"),
-            ("Library/Developer/CoreSimulator/Devices", "iPhone simulators", "Their test data goes too"),
             ("Library/Application Support/MobileSync/Backup", "iPhone and iPad backups", "Keep any not in iCloud"),
         ] {
             if let n = get(rel) { add("Developer", label, why, n.path, n.size, label.contains("archive") || rel.contains("Backup") ? "review" : "safe", ["kind": "dir"]) }
@@ -166,7 +216,7 @@ extension Store {
             }
         }
         if let tr = get(".Trash") {
-            add("Trash", "Trash", "", tr.path, tr.size, "safe", ["action": "empty"])
+            add("Trash", "Trash", "", tr.path, tr.size + trashedSince, "safe", ["action": "empty"])
         }
         if let dl = get("Downloads") {
             let dp = dl.path
@@ -188,6 +238,41 @@ extension Store {
                 if age > 90 { add("Downloads", ch.name, "Untouched \(Int(age)) days", ch.path, ch.size, "review", ["kind": "dir"]) }
             }
         }
+
+        // ---- things Rumi shows you how to clear, and doesn't clear itself ----
+        // A tool's own cleanup can't be undone, so Rumi gives the command and leaves running it to you.
+        if let n = get("Library/pnpm/store") {
+            how("pnpm store", "Shared with your projects", n.path, n.size, "safe",
+                cmd: "pnpm store prune", steps: ["Run this in Terminal.", "It removes packages no project uses. It can't be undone."])
+        }
+        if let n = get("go/pkg/mod") {
+            how("Go module downloads", "Downloaded again when a project needs them", n.path, n.size, "safe",
+                cmd: "go clean -modcache", steps: ["Run this in Terminal.", "Go downloads modules again on the next build. It can't be undone."])
+        }
+        if let n = get("Library/Developer/CoreSimulator/Devices") {
+            how("iPhone simulators", "Old ones can go", n.path, n.size, "review",
+                cmd: "xcrun simctl delete unavailable", steps: ["Run this in Terminal.", "It removes simulators for versions you no longer have. Their test data goes too."])
+        }
+        // A virtual machine an app keeps in its data folder (a disk image of 2 GB or more) is often the biggest single thing
+        // there. It can hold your work, and the app has to be the one to remove or rebuild it.
+        var machines: [String: String] = [:]   // folder → the app's folder name or bundle id
+        for area in ["/Library/Application Support/", "/Library/Containers/"] {
+            let base = HOME + area
+            for b in big where b.alloc >= Int64(2) << 30 && b.path.hasPrefix(base)
+                && ["img", "qcow2", "vmdk", "vdi", "raw"].contains(fileExt((b.path as NSString).lastPathComponent)) {
+                let parts = b.path.dropFirst(base.count).split(separator: "/")
+                if parts.count >= 3 { machines[base + parts[0] + "/" + parts[1]] = String(parts[0]) }   // app / folder / … / image
+            }
+        }
+        var machineRows: [(Int, String)] = []
+        for (p, app) in machines.sorted(by: { $0.key < $1.key }) {
+            guard let d = idx[p] else { continue }
+            let n = out.count
+            how("\(app)'s virtual machine", "Can hold your work", d.path, d.size, "keep",
+                steps: ["Quit \(app).", "Look for a reset or clean-up option in \(app) first.", "Or delete this folder in Finder. \(app) may download it again."])
+            if out.count > n { machineRows.append((n, app)); appKey[d.path] = app }
+        }
+
         let seen = Set(out.compactMap { $0["path"] as? String })
         for b in big {   // biggest first
             if b.alloc < 300 * 1024 * 1024 { break }
@@ -199,16 +284,93 @@ extension Store {
             }
         }
         let apps = idx["/Applications"].map { a in a.dirs.sorted(by: { $0.size > $1.size }).prefix(12).filter { $0.name.hasSuffix(".app") }.map { ($0.name, $0.path, $0.size) } } ?? []
+        let installed = (idx["/Applications"]?.dirs ?? []).filter { $0.name.hasSuffix(".app") }.map { $0.path }
+        let scan = finished
         lock.unlock()
 
-        for (i, id) in cacheIDs.enumerated() { out[i]["title"] = cacheName(id) }   // the cache rows come first
+        for (i, id) in titleID { out[i]["title"] = cacheName(id) }
+        for (i, app) in machineRows where app.contains(".") && !app.contains(" ") {   // a container is named by bundle id
+            let name = cacheName(app)
+            out[i]["title"] = "\(name)'s virtual machine"
+            if var h = out[i]["how"] as? [String: Any], let steps = h["steps"] as? [String] { h["steps"] = steps.map { $0.replacingOccurrences(of: app, with: name) }; out[i]["how"] = h }
+        }
+        // one row per app: an app can keep caches in several places (two folders in Caches, and more in its own data)
+        func parts(_ d: [String: Any]) -> [[String: Any]] { d["parts"] as? [[String: Any]] ?? [["path": d["path"] ?? "", "size": d["size"] ?? 0]] }
+        func join(_ i: Int, _ more: [[String: Any]], _ size: Int64) { out[i]["parts"] = parts(out[i]) + more; out[i]["size"] = (out[i]["size"] as? Int64 ?? 0) + size }
+        func row(named n: String, before end: Int) -> Int? {
+            out[..<end].firstIndex { $0["group"] as? String == "Caches" && $0["safety"] as? String == "safe" && ($0["title"] as? String)?.lowercased() == n.lowercased() }
+        }
+        for i in titleID.keys.sorted().reversed() {   // later rows fold into the first with the same name
+            guard let t = out[i]["title"] as? String, !t.hasPrefix("macOS"), let first = row(named: t, before: i) else { continue }
+            join(first, parts(out[i]), out[i]["size"] as? Int64 ?? 0)
+            out.remove(at: i)
+        }
+        for d in inData {
+            if let i = row(named: d.name, before: out.count) { join(i, d.parts, d.size) }
+            else if let first = d.parts.first?["path"] as? String { add("Caches", d.name, "", first, d.size, "safe", ["kind": "dir", "parts": d.parts]) }
+        }
+        // Homebrew keeps every old version of what it installs, outside the folders Rumi maps
+        if let (cellar, size) = brewOld(scan) {
+            how("Homebrew old versions", "Kept after every update", cellar, size, "safe",
+                cmd: "brew cleanup", steps: ["Run this in Terminal.", "It removes old versions and downloads. It can't be undone."])
+        }
         for (name, path, size) in apps {
             if let last = lastUsed(path), (now - last) / 86400 > 120 {
                 add("Apps", String(name.dropLast(4)), "Unused \(Int((now - last) / 86400 / 30)) months", path, size, "review", ["kind": "app"])
             }
         }
-        lock.lock(); suggested = Set(out.compactMap { $0["path"] as? String }); lock.unlock()
+        // an app that's open has to quit before its caches go
+        let running = runningApps()
+        var all = Set<String>()
+        for i in out.indices {
+            let paths = (out[i]["parts"] as? [[String: Any]])?.compactMap { $0["path"] as? String } ?? [out[i]["path"] as? String ?? ""]
+            if out[i]["act"] as? String != "how" { all.formUnion(paths) }
+            guard let first = paths.first(where: { appKey[$0] != nil }), let key = appKey[first] else { continue }
+            if let app = openApp(for: key, in: running) { out[i]["open"] = app }
+            if let icon = appPath(for: key, in: paths, title: out[i]["title"] as? String ?? "", among: installed) { out[i]["app"] = icon }   // the row shows the app's icon
+        }
+        lock.lock(); suggested = all; suggestedApp = appKey; lock.unlock()
         return (200, ["items": out])
+    }
+
+    /// Old versions Homebrew still keeps: where its cellar is and how much they take. Measured once per scan.
+    private func brewOld(_ scan: Double) -> (String, Int64)? {
+        lock.lock(); let kept = brewKept; lock.unlock()
+        if let k = kept, k.scan == scan { return k.size > 0 ? (k.cellar, k.size) : nil }
+        let fm = FileManager.default
+        guard let cellar = ["/opt/homebrew/Cellar", "/usr/local/Cellar"].first(where: { fm.fileExists(atPath: $0) }) else { return nil }
+        var total: Int64 = 0
+        for formula in (try? fm.contentsOfDirectory(atPath: cellar)) ?? [] {
+            let dir = cellar + "/" + formula
+            let versions = ((try? fm.contentsOfDirectory(atPath: dir)) ?? []).filter { !$0.hasPrefix(".") }.map { dir + "/" + $0 }
+            guard versions.count > 1 else { continue }
+            func made(_ p: String) -> Date { ((try? fm.attributesOfItem(atPath: p))?[.creationDate] as? Date) ?? .distantPast }
+            for old in versions.sorted(by: { made($0) < made($1) }).dropLast() { total += Frees.measure(old, workers: 2).frees }
+        }
+        lock.lock(); brewKept = (scan, cellar, total); lock.unlock()
+        return total > 0 ? (cellar, total) : nil
+    }
+
+    /// Where the app that owns a cache is installed, so its row can show the app's icon. `key` is how the cache folder
+    /// is named: a bundle id, or a plain name ("Player", or a maker's name with the app's folder inside it).
+    private func appPath(for key: String, in paths: [String], title: String, among installed: [String]) -> String? {
+        func norm(_ s: String) -> String { String(s.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }) }
+        var found: String?
+        if key.contains("."), !key.contains(" ") {
+            var parts = key.split(separator: ".").map(String.init)
+            while found == nil, parts.count >= 3 {   // a helper's id ("com.example.player.helper") leads back to its app
+                found = NSWorkspace.shared.urlForApplication(withBundleIdentifier: parts.joined(separator: "."))?.path
+                parts.removeLast()
+            }
+        } else {
+            // "Maker/App/…": the app is named after the folder, the folder inside it, or both together
+            let inside = Set(paths.compactMap { $0.components(separatedBy: "/" + key + "/").dropFirst().first?.split(separator: "/").first.map(String.init) })
+            var names = Set(([key, title] + inside.map { key + $0 }).map(norm).filter { $0.count >= 3 })
+            if names.contains("code") { names.insert("visualstudiocode") }   // its data folder is just "Code"
+            found = installed.first { names.contains(norm((($0 as NSString).lastPathComponent as NSString).deletingPathExtension)) }
+        }
+        guard let f = found, pathInRoots(f) != nil else { return nil }   // the page can only load icons from the mapped folders
+        return f
     }
 
     /// "com.example.player" → "Player". Apple's own caches are labelled as macOS.
@@ -444,6 +606,38 @@ func rootOf(_ p: String, in roots: [String]) -> String? { roots.first { p == $0 
 /// Whether a folder is one of the scanned folders itself (Home, Applications), links resolved.
 func isScannedRoot(_ p: String) -> Bool { scannedRoots.contains(p) }
 
+/// The apps that are open now (not Rumi, not background-only helpers).
+func runningApps() -> [(name: String, id: String, file: String, dock: Bool)] {
+    let read = {
+        NSWorkspace.shared.runningApplications.filter { $0.activationPolicy != .prohibited && $0.processIdentifier != getpid() }
+            .map { (name: $0.localizedName ?? "", id: $0.bundleIdentifier ?? "", file: $0.bundleURL?.deletingPathExtension().lastPathComponent ?? "", dock: $0.activationPolicy == .regular) }
+    }
+    return Thread.isMainThread ? read() : DispatchQueue.main.sync(execute: read)
+}
+
+/// The open app a cache or data folder belongs to, if any. `key` is how the folder is named: a bundle id
+/// ("com.example.player") or a plain name ("Player", or a maker's name that holds its apps). An app in the Dock matches
+/// loosely (by its maker, or a name that starts or ends with the folder's); a background helper only by its exact name.
+func openApp(for key: String, in apps: [(name: String, id: String, file: String, dock: Bool)]) -> String? {
+    func norm(_ s: String) -> String { String(s.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }) }
+    let k = norm(key), isID = key.contains(".") && !key.contains(" ")
+    guard k.count >= 3 else { return nil }
+    for a in apps where !a.name.isEmpty {
+        let id = a.id.lowercased()
+        if isID {
+            let kid = key.lowercased()
+            if !id.isEmpty, id == kid || kid.hasPrefix(id + ".") || id.hasPrefix(kid + ".") { return a.name }
+            continue
+        }
+        let names = [norm(a.name), norm(a.file)]
+        if names.contains(k) { return a.name }
+        guard a.dock else { continue }
+        if id.split(separator: ".").contains(where: { norm(String($0)) == k }) { return a.name }
+        if k.count >= 4, names.contains(where: { $0.hasPrefix(k) || $0.hasSuffix(k) }) { return a.name }
+    }
+    return nil
+}
+
 /// Places under ~ that can't be trashed, nor anything inside them. The page keeps the same list.
 let PROTECTED_AREAS: [(String, String)] = [
     ("Library/Mobile Documents", "it's in iCloud Drive, where deleting reaches all your devices"),
@@ -532,20 +726,49 @@ func showInFinder(_ path: String, select: Bool, on screen: NSScreen?) -> [Int] {
     return [left, top, left + Int(w), top + Int(h)]
 }
 
-/// Finder does the deleting so "Put Back" works; if Finder refuses, fall back to the Trash API.
-/// Returns where the item landed in the Trash, so Rumi can undo. A link is never followed.
-func moveToTrash(_ p: String) -> (Bool, String, String?) {
-    var st = stat(), err = ""
-    guard lstat(p, &st) == 0 else { return (false, "no longer exists", nil) }
-    if st.st_mode & S_IFMT != S_IFLNK {   // Finder's alias would resolve a link; the Trash API moves the link itself
-        let (ok, e, out) = osascript(["on run argv", "tell application \"Finder\"", "set t to delete (POSIX file (item 1 of argv) as alias)",
-                                      "return POSIX path of (t as alias)", "end tell", "end run"], args: [p])
-        if ok { return (true, "", out.isEmpty ? nil : (out.hasSuffix("/") && out.count > 1 ? String(out.dropLast()) : out)) }
-        err = e
+/// Finder does the deleting so "Put Back" works, and everything goes in one request: one move and one sound, however
+/// many things were picked. Whatever Finder leaves behind goes through the Trash API, one at a time.
+/// Returns, for each path, whether it went, why not, and where it landed in the Trash (so Rumi can undo).
+/// A link is never followed.
+func moveToTrash(_ paths: [String]) -> [String: (ok: Bool, why: String, landed: String?)] {
+    var res: [String: (ok: Bool, why: String, landed: String?)] = [:]
+    var ids: [String: UInt64] = [:]   // each one's file number: it keeps it in the Trash, whatever name it's given there
+    var viaFinder: [String] = []
+    func fileID(_ p: String) -> UInt64? { var st = stat(); return lstat(p, &st) == 0 ? UInt64(st.st_ino) : nil }
+    for p in paths where ids[p] == nil {
+        var st = stat()
+        guard lstat(p, &st) == 0 else { res[p] = (false, "no longer exists", nil); continue }
+        ids[p] = UInt64(st.st_ino)
+        if st.st_mode & S_IFMT != S_IFLNK { viaFinder.append(p) }   // Finder's alias would resolve a link; the Trash API moves the link itself
     }
-    var landed: NSURL?
-    do { try FileManager.default.trashItem(at: URL(fileURLWithPath: p), resultingItemURL: &landed); return (true, "", landed?.path) }
-    catch { return (false, String((err.isEmpty ? error.localizedDescription : err).prefix(200)), nil) }
+    var err = ""
+    if !viaFinder.isEmpty {
+        let (ok, e, out) = osascript([
+            "on run argv", "set fs to {}", "repeat with p in argv", "set end of fs to (POSIX file (contents of p) as alias)", "end repeat",
+            "set out to \"\"", "with timeout of 600 seconds", "tell application \"Finder\"", "set t to delete fs",
+            "if class of t is not list then set t to {t}",
+            "repeat with x in t", "set out to out & POSIX path of (x as alias) & linefeed", "end repeat",
+            "end tell", "end timeout", "return out", "end run"], args: viaFinder)
+        if !ok { err = e }
+        var landed: [UInt64: String] = [:]
+        for line in out.split(separator: "\n") {
+            let l = line.hasSuffix("/") && line.count > 1 ? String(line.dropLast()) : String(line)
+            if let id = fileID(l) { landed[id] = l }
+        }
+        let gone = viaFinder.filter { fileID($0) == nil }
+        // Finder stopped part-way, or its answer couldn't be read: what did move is found by looking in the Trash
+        if gone.contains(where: { landed[ids[$0] ?? 0] == nil }) {
+            let tp = HOME + "/.Trash"
+            for n in (try? FileManager.default.contentsOfDirectory(atPath: tp)) ?? [] { if let id = fileID(tp + "/" + n), landed[id] == nil { landed[id] = tp + "/" + n } }
+        }
+        for p in gone { res[p] = (true, "", landed[ids[p] ?? 0]) }
+    }
+    for p in paths where res[p] == nil {
+        var l: NSURL?
+        do { try FileManager.default.trashItem(at: URL(fileURLWithPath: p), resultingItemURL: &l); res[p] = (true, "", l?.path) }
+        catch { res[p] = (false, String((err.isEmpty ? error.localizedDescription : err).prefix(200)), nil) }
+    }
+    return res
 }
 
 /// What Move to Trash moved and where it landed ("from\0to", standardized). Undo accepts only these pairs.
@@ -581,35 +804,69 @@ func trashJSON(_ paths: [String]) -> [String: Any] {
         let files = (g["files"] as? [[String: Any]] ?? []).compactMap { $0["path"] as? String }
         for f in files { sets[f, default: []].append(files) }
     }
+    let apps = Store.shared.suggestedApp
     Store.shared.lock.unlock()
+    let running = apps.isEmpty ? [] : runningApps()
     func exists(_ f: String) -> Bool { var st = stat(); return lstat(f, &st) == 0 }
-    // copies go last, so a folder holding another copy has already moved when the copy is checked
+    // Decide first, then move everything in one go. Copies are decided last, and what's already set to move counts as
+    // gone, so a folder holding another copy is out of the way when the copy is checked.
     let copy = asked.map { sets[($0 as NSString).standardizingPath] != nil ? 1 : 0 }
     let order = asked.indices.sorted { (copy[$0], $0) < (copy[$1], $1) }
     var results = [[String: Any]](repeating: [:], count: asked.count)
+    var go: [(i: Int, path: String, size: Int64?)] = [], moving: [String] = []
+    func there(_ f: String) -> Bool { exists(f) && !moving.contains { f == $0 || f.hasPrefix($0 + "/") } }
     for i in order {
         var (path, why) = trashCheck(asked[i])
-        var ok = false, landed: String?
-        if let p = path, let groups = sets[p], groups.contains(where: { g in !g.contains { $0 != p && exists($0) } }) {
+        if let p = path, let groups = sets[p], groups.contains(where: { g in !g.contains { $0 != p && there($0) } }) {
             why = "it's the last copy"
+        } else if let p = path, let key = apps[p], let app = openApp(for: key, in: running) {
+            why = "\(app) is open. Quit it first"   // its cache is in use: removing it under the app can break what it's doing
         } else if let p = path {
             var st = stat(); let size: Int64? = lstat(p, &st) == 0 ? Int64(st.st_blocks) * 512 : nil   // small files aren't in the tree: say how much left
-            (ok, why, landed) = moveToTrash(p)
-            if ok {
-                Store.shared.lock.lock(); Store.shared.detach(p, size: size); Store.shared.lock.unlock()
-                if let l = landed { undoLock.lock(); undoable.insert(undoKey(l, p)); undoLock.unlock() }
-            }
+            go.append((i, p, size)); moving.append(p)
         }
-        var r: [String: Any] = ["path": path ?? asked[i], "ok": ok, "error": why]
-        if let l = landed { r["trashed"] = l }
-        results[i] = r
+        results[i] = ["path": path ?? asked[i], "ok": false, "error": why]
     }
-    if results.contains(where: { $0["ok"] as? Bool == true }) { Snapshot.saveSoon() }   // so trashed files don't reappear next launch
+    let moved = moveToTrash(go.map { $0.path })
+    var done = Set<String>()
+    for g in go {
+        guard let m = moved[g.path] else { continue }
+        results[g.i]["ok"] = m.ok; results[g.i]["error"] = m.why
+        if let l = m.landed { results[g.i]["trashed"] = l }
+        guard m.ok, done.insert(g.path).inserted else { continue }
+        let S = Store.shared
+        S.lock.lock(); let before = S.root?.size ?? 0; S.detach(g.path, size: g.size); S.trashedSince += max(0, before - (S.root?.size ?? 0)); S.lock.unlock()
+        if let l = m.landed { undoLock.lock(); undoable.insert(undoKey(l, g.path)); undoLock.unlock() }
+    }
+    if results.contains(where: { $0["ok"] as? Bool == true }) { Snapshot.saveSoon(); Frees.forget(results.filter { $0["ok"] as? Bool == true }.compactMap { $0["path"] as? String }) }   // so trashed files don't reappear next launch
     return ["results": results]
 }
 
+/// Empty the Trash. Rumi removes what's in it itself: asked to do it, Finder puts its own "are you sure?" behind Rumi's
+/// window (Rumi has already asked) and refuses anything an app in the background still has open.
+/// Without access to the Trash folder, Finder is asked after all.
 func emptyTrashJSON() -> [String: Any] {
-    let (ok, err, _) = osascript(["tell application \"Finder\" to empty trash"])
-    if ok { Store.shared.emptiedTrash(); Snapshot.saveSoon(); undoLock.lock(); undoable.removeAll(); undoLock.unlock() }
+    var ok = false, err = ""
+    if let left = removeContents(of: HOME + "/.Trash") {
+        ok = left.count == 0
+        if !ok { err = "\(left.count) item\(left.count == 1 ? "" : "s") stayed. \(left.why)" }
+    } else {
+        (ok, err, _) = osascript(["with timeout of 600 seconds", "tell application \"Finder\" to empty trash", "end timeout"])
+    }
+    undoLock.lock(); undoable.removeAll(); undoLock.unlock()
+    if ok { Store.shared.emptiedTrash(); Snapshot.saveSoon() } else { Store.shared.startScan() }   // partly emptied: measure again
     return ["ok": ok, "error": String(err.prefix(200))]
+}
+
+/// Delete everything inside a folder for good. Links are removed, never followed. Returns how many things stayed and
+/// why the first one did, or nil if the folder can't be read.
+func removeContents(of dir: String) -> (count: Int, why: String)? {
+    let fm = FileManager.default
+    var st = stat()
+    guard lstat(dir, &st) == 0, st.st_mode & S_IFMT == S_IFDIR, let names = try? fm.contentsOfDirectory(atPath: dir) else { return nil }
+    var left = 0, why = ""
+    for n in names where n != ".DS_Store" {   // Finder's own note of where things came from
+        do { try fm.removeItem(atPath: dir + "/" + n) } catch { left += 1; if why.isEmpty { why = error.localizedDescription } }
+    }
+    return (left, why)
 }

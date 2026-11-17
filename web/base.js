@@ -51,6 +51,7 @@ function ago(t) {
   if (d < 600) return Math.round(d / 30) + " months ago"; return (d / 365).toFixed(1) + " years ago";
 }
 let HOME = "";
+let BIN = "Trash";   // what this Mac calls the Trash ("Bin" in British English and its relatives); set from the app's status
 const tilde = p => HOME && p && p.startsWith(HOME) ? "~" + p.slice(HOME.length) : p;
 const base = p => (p || "").split("/").filter(Boolean).pop() || p;
 // the folder something sits in, by name ("Downloads"); the full path is always in the hover hint
@@ -71,6 +72,7 @@ const ICON = {
   back: `<svg class="i" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>`,
   x: `<svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>`,
   info: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.7M8 5.2v.1"/></svg>`,
+  bin: `<svg class="i" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg>`,
   lock: `<svg class="i lk" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`,
 };
 

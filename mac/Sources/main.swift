@@ -399,6 +399,23 @@ if CommandLine.arguments.contains("--check-trash") {
     let r = (trashJSON([t])["results"] as? [[String: Any]] ?? []).first ?? [:]
     print("trash test file:", r)
     if let l = r["trashed"] as? String { print("put back:", putBackJSON([["from": l, "to": t]]), "exists again:", FileManager.default.fileExists(atPath: t)) }
+    // three at once, with the same name: one request to Finder, and each one's place in the Trash is still known
+    let many = ["a", "b", "c"].map { dir + "/" + $0 + "/test.txt" }
+    for m in many { try? fm.createDirectory(atPath: (m as NSString).deletingLastPathComponent, withIntermediateDirectories: true); fm.createFile(atPath: m, contents: Data(m.utf8)) }
+    let rs = trashJSON(many)["results"] as? [[String: Any]] ?? []
+    print("trash three:", rs.map { "\($0["ok"] ?? "") \((($0["trashed"] as? String ?? "?") as NSString).lastPathComponent)" })
+    print("put back three:", putBackJSON(rs.compactMap { r in (r["trashed"] as? String).map { ["from": $0, "to": r["path"] as? String ?? ""] } }),
+          "each has its own text again:", many.allSatisfy { (try? String(contentsOfFile: $0, encoding: .utf8)) == $0 })
+    // emptying: everything inside goes, a link goes without what it points to
+    let bin = dir + "/bin", outside = dir + "/outside.txt"
+    try? fm.createDirectory(atPath: bin + "/folder/deep", withIntermediateDirectories: true)
+    fm.createFile(atPath: outside, contents: Data("keep".utf8)); fm.createFile(atPath: bin + "/folder/deep/file.txt", contents: Data("x".utf8))
+    try? fm.createSymbolicLink(atPath: bin + "/link", withDestinationPath: outside)
+    try? fm.createSymbolicLink(atPath: bin + "/folder/link-to-folder", withDestinationPath: dir + "/a")
+    let held = FileHandle(forReadingAtPath: bin + "/folder/deep/file.txt")   // a file something still has open
+    print("empty a test folder:", removeContents(of: bin) as Any, "left inside:", (try? fm.contentsOfDirectory(atPath: bin)) ?? [],
+          "the linked file is still there:", fm.fileExists(atPath: outside), "and the linked folder:", fm.fileExists(atPath: many[0]))
+    try? held?.close()
     try? FileManager.default.removeItem(atPath: dir)
     exit(0)
 }
@@ -430,9 +447,12 @@ if let i = CommandLine.arguments.firstIndex(of: "--mem"), CommandLine.arguments.
     exit(0)
 }
 
-// `Rumi --bench-private [folder]`: the speed test for private ("frees if deleted") sizes. See Bench.swift.
-if let i = CommandLine.arguments.firstIndex(of: "--bench-private") {
-    PrivateBench.run(CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : HOME)
+// `Rumi --frees <file or folder>`: what it uses, and what removing it would give back. See Frees.swift.
+if let i = CommandLine.arguments.firstIndex(of: "--frees"), CommandLine.arguments.count > i + 1 {
+    var st = stat()
+    if lstat(CommandLine.arguments[i + 1], &st) == 0, st.st_mode & S_IFMT == S_IFREG { _ = Frees.file(CommandLine.arguments[i + 1], say: true) }   // what the system reports about one file
+    let t0 = Date(), s = Frees.measure(CommandLine.arguments[i + 1])
+    print(String(format: "uses %lld · frees %lld · %.2f s", s.uses, s.frees, Date().timeIntervalSince(t0)))
     exit(0)
 }
 

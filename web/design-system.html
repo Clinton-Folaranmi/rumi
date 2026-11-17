@@ -56,7 +56,7 @@
 <body>
 <div class="ds">
   <div class="ds-top"><h1>Rumi</h1><p>Design system · the shipping look is <b>Cartridge</b>. Everything here is drawn with the app's own CSS.</p></div>
-  <nav class="ds-nav"><a href="#rules">Rules</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#shape">Shape</a><a href="#motion">Motion</a><a href="#buttons">Buttons</a><a href="#chips">Chips &amp; menu</a><a href="#cartridges">Cartridges</a><a href="#changed">What changed</a><a href="#rows">List rows</a><a href="#search">Search</a><a href="#viewer">Viewer</a><a href="#nav">Path &amp; status</a><a href="#open">Open decisions</a></nav>
+  <nav class="ds-nav"><a href="#rules">Rules</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#shape">Shape</a><a href="#motion">Motion</a><a href="#buttons">Buttons</a><a href="#chips">Chips &amp; menu</a><a href="#cartridges">Cartridges</a><a href="#changed">What changed</a><a href="#rows">List rows</a><a href="#cleanup">Clean up</a><a href="#search">Search</a><a href="#viewer">Viewer</a><a href="#nav">Path &amp; status</a><a href="#open">Open decisions</a></nav>
 
   <section class="ds-s" id="rules">
     <h2>Rules</h2>
@@ -152,6 +152,34 @@
     <div class="pane-demo" id="rows-demo"></div>
   </section>
 
+  <section class="ds-s" id="cleanup">
+    <h2>Clean up</h2>
+    <p class="lead">Rumi does one of two things with what it finds. It moves it to the Trash, where you can undo. Or, for a tool's own cleanup (which can't be undone) and for things that belong to an app, it shows how and leaves the doing to you. Three labels say how sure it is: Safe, Check first, Won't touch.</p>
+    <div class="grid" style="grid-template-columns: 420px 336px; gap: 28px; align-items: start">
+      <div class="pane-demo" id="clean-demo"></div>
+      <div class="insp" id="how-demo" style="position: static; animation: none"></div>
+    </div>
+    <h3>The Bin screen</h3>
+    <p class="lead">Move to Bin brings up a big Rumi, and everything happens on its screen: the question (× on a line leaves it out), an OK per line while things move, how much is now in the Bin, and, after emptying, how much was freed. The two keys under the screen are the only buttons. Empty Bin is press-and-hold, because it can't be undone: the face strains, the device trembles, a tick quickens, and letting go runs it back; a plain click answers "Hold to empty". Nothing is called freed until the Bin is emptied. "Bin" or "Trash" follows the Mac's language. Undo is a small word under the device. The sounds play only if the Mac's interface sounds are on.</p>
+    <div class="binbox" style="justify-items: start; margin: 0 0 26px">
+      <div class="sc">
+        <div class="sc-ridges"><i></i><i></i><i></i></div>
+        <div class="sc-screen"><div class="sc-in">
+          <div class="sc-face" id="bin-demo-face"></div>
+          <div class="sc-l">Moved to the Bin</div><div class="sc-big num">5.2 GB</div>
+          <div class="sc-disk" id="bin-demo-disk"></div>
+          <div class="sc-l dim">Still on your disk · free <b class="num">19.2 GB</b></div>
+          <div class="sc-meter"><em style="transform: translateX(-55%)"></em></div><div class="sc-l">Hold to empty</div>
+        </div></div>
+        <div class="sc-foot"><span>RUMI</span><i class="sc-led"></i></div>
+        <div class="sc-keys"><button class="key k-b"><span class="lbl">Done</span></button><button class="key k-a holding"><em style="transform: translateX(-55%)"></em><span class="lbl">Empty Bin</span></button></div>
+        <div class="sc-teeth"></div>
+      </div>
+      <button class="sc-undo" style="margin-left: 160px">Undo</button>
+    </div>
+    <div class="spec"><b>The heading:</b> the total and its button share one line. What a group is sits in the hint on its name, marked by the small "i". <b>An app that's open:</b> its caches can't be picked until it quits; an orange Open tag takes the place of Safe, and the line under the name, in the same orange, says which app to quit. The row isn't dimmed. <b>App icons:</b> a row that belongs to an app keeps its cartridge; the app's icon takes the folder's place on the label. <b>Real sizes:</b> the size is what comes back. When part of it is shared with copies elsewhere, "of" gives the full size and the hint explains. <b>One row per app:</b> an app's cache folders go together. <b>How-to rows</b> can't be picked: the row (or How to, which shows on hover beside Finder) opens a card with the steps and, where there is one, the command to copy. Rumi never runs it.</div>
+  </section>
+
   <section class="ds-s" id="search">
     <h2>Search</h2>
     <p class="lead">One search, two doors: ⌘F in the app, and the cartridge in the menu bar (or ⌃⌥Space from any app), which opens the same panel over whatever you're doing. Rumi stays in the menu bar when its window is closed, and can start at login from the cartridge's menu.</p>
@@ -191,6 +219,7 @@
 </div>
 
 <div class="hint" id="hint" hidden></div>
+<script src="/rumi.js"></script>
 <script>
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const $ = id => document.getElementById(id);
@@ -269,11 +298,29 @@ document.querySelectorAll(".b.hov").forEach(b => { b.style.filter = "brightness(
 const tile = c => `<span class="tile" style="--c:var(--c-${c})">${FOLDER}</span>`;
 const row = (t, tag, why, size, on, tip) => `<div class="row" style="${on ? "" : ""}"><input type="checkbox" ${on ? "checked" : ""}>${tile("cache")}<div class="nm" data-tip="${tip || ""}"><div class="t"><span class="tt">${t}</span>${tag}</div>${why ? `<div class="why">${why}</div>` : ""}</div><div class="sz num">${size}</div></div>`;
 $("rows-demo").innerHTML = `<div class="grp"><span class="t">Caches</span><span class="s num">27.3 GB</span><span class="d">Rebuilt automatically</span></div>`
-  + row("Sandbox's virtual machine", `<span class="tag review">Check first</span>`, "Quit Sandbox first · it may download again", "9.4 GB", true)
+  + row("Old exports", `<span class="tag review">Check first</span>`, "Untouched 120 days", "9.4 GB", true)
   + row("Browser", `<span class="tag safe">Safe</span>`, "", "5.10 GB", false, "~/Library/Caches/Browser")
   + row("Notes", `<span class="tag safe">Safe</span>`, "", "3.20 GB", false, "~/Library/Caches/com.example.notes")
   + row("hero.png", `<span class="in">public</span><span class="tag keep">Keep</span>`, "", "2 MB", false, "~/Projects/site/public/hero.png")
   + row("hero.png", `<span class="in">dist</span>`, "", "2 MB", false, "~/Projects/site/dist/hero.png");
+
+// Clean up: rows for an open app, a shared size and a how-to, and the how-to card
+const ICON = { lock: `<svg class="i lk" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`,
+  finder: `<svg class="i" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M12 9.5v3c0 .6-.4 1-1 1H3.5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1h3"/></svg>` };
+const INFO = `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.7M8 5.2v.1"/></svg>`;
+$("clean-demo").innerHTML = `<div class="intro"><span class="bignum num" data-tip="What Rumi can move to the Trash">8.9 GB</span><div class="btns"><button class="btn small">Select all safe · 6.5 GB</button></div></div>`
+  + `<div class="grp" data-tip="Apps rebuild these by themselves when they need them"><span class="t">Caches</span><span class="s num">8.9 GB</span><span class="info">${INFO}</span></div>`
+  + `<div class="row locked isopen" data-tip="Quit Browser, then this can go">${tile("cache")}<div class="nm"><div class="t"><span class="tt">Browser</span><span class="tag open">Open</span></div><div class="why">Quit Browser first</div></div><div class="sz num">5.10 GB</div></div>`
+  + `<div class="row"><input type="checkbox">${tile("cache")}<div class="nm"><div class="t"><span class="tt">Packages</span><span class="tag safe">Safe</span></div><div class="why">Downloaded again when needed</div></div><div class="sz num" data-tip="Uses 1.4 GB. 1.1 GB is shared with copies elsewhere, so removing this frees 270 MB">270 MB<small>of 1.4 GB</small></div></div>`
+  + `<div class="row"><input type="checkbox">${tile("cache")}<div class="nm"><div class="t"><span class="tt">Models</span><span class="tag review">Check first</span></div><div class="why">A tool's downloads · see what's inside</div></div><div class="sz num">2.2 GB</div></div>`
+  + `<div class="grp" data-tip="Rumi won't clear these itself. Each one shows the steps"><span class="t">Clear these yourself</span><span class="s num">11.3 GB</span><span class="info">${INFO}</span></div>`
+  + `<div class="row nochk how">${tile("app")}<div class="nm"><div class="t"><span class="tt">Sandbox's virtual machine</span><span class="tag keep">Won't touch</span></div><div class="why">Can hold your work</div></div><div class="sz num">9.4 GB</div><div class="hov"><button>${INFO}How to</button><button>${ICON.finder}Finder</button></div></div>`
+  + `<div class="row nochk how inspected">${tile("dev")}<div class="nm"><div class="t"><span class="tt">Package store</span><span class="tag safe">Safe</span></div><div class="why">Shared with your projects</div></div><div class="sz num">1.9 GB</div><div class="hov"><button>${INFO}How to</button><button>${ICON.finder}Finder</button></div></div>`;
+$("bin-demo-face").innerHTML = Rumi.face("happy", 84);
+$("bin-demo-disk").innerHTML = Array.from({ length: 26 }, (_, i) => `<i class="${i < 22 ? "dk-u" : i < 23 ? "dk-b" : ""}"></i>`).join("");
+$("how-demo").innerHTML = `<div class="ih">${tile("dev")}<div style="min-width:0"><div class="n">Package store</div><div class="s num">1.9 GB</div></div><button class="x" aria-label="Close"><svg class="i" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <ol class="steps"><li>Run this in Terminal.<div class="cmd"><code>tool store prune</code><button class="btn small">Copy</button></div></li><li>It removes packages no project uses. It can't be undone.</li></ol>
+  <div class="a"><button class="btn">${ICON.finder}Show in Finder</button></div>`;
 
 // what changed: the since chip and the four cartridges of the Changed view
 const since = (cls, col, amt) => `<button class="chip ${cls}" style="margin:0"><i style="background:var(${col})"></i><b class="num">${amt}</b> since Friday</button>`;

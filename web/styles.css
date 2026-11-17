@@ -285,7 +285,6 @@ main, header { min-width: 0; }
 .row.keeprow .lock { color: var(--ok); }
 .warnline { color: var(--warn); font-weight: 600; font-size: 12px; margin: 6px 0 0; }
 .modal .warnline { margin: -4px 0 12px; font-size: 13px; }
-.toast .btn.ghost { color: #f1efea; box-shadow: none; background: transparent; }
 .linkish { border: 0; background: none; padding: 0; margin-left: auto; color: inherit; font: inherit; text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 3px; }
 .linkish:hover { color: var(--ink); }
 /* 5.1: tags in sentence case like everything else */
@@ -669,6 +668,7 @@ body.quick .ffoot { padding-bottom: 2px; }
 .sc-screen::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(rgba(255,255,255,.04) 0 1px, transparent 1px 4px); }
 .sc-in { height: 100%; display: grid; align-content: center; justify-items: center; gap: 4px; padding: 0 22px; text-align: center; will-change: transform; text-shadow: 0 0 14px rgba(255,143,179,.55); }
 .sc-in > * { animation: sc-in .4s cubic-bezier(.2,.9,.3,1) backwards; }
+.sc-in.still > * { animation: none; }
 .sc-in > :nth-child(2) { animation-delay: .25s; } .sc-in > :nth-child(3) { animation-delay: .4s; } .sc-in > :nth-child(4) { animation-delay: .55s; }
 .sc-in > :nth-child(5) { animation-delay: .7s; } .sc-in > :nth-child(n+6) { animation-delay: .85s; }
 .sc-face { height: 50px; margin-bottom: 4px; transform-origin: 50% 60%; will-change: transform; }

@@ -109,7 +109,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
     <button class="btn ghost vi" id="v-app" data-tip="Open in its app"></button>
     <button class="btn ghost vi" id="v-finder" data-tip="Show in Finder"></button>
     <button class="btn small" id="v-pick"></button>
-    <button class="btn ghost vi" id="v-trash"></button>
+    <button class="btn ghost vi" id="v-trash" data-tip="Move to Trash · ⌘⌫"></button>
     <button class="btn ghost vi" id="v-x" data-tip="Close · Esc"></button>
   </div>
   <div class="vstage" id="v-stage"><div class="vframe" id="v-frame"></div>
@@ -1413,7 +1413,7 @@ function openConfirm(items) {
   $("sc-undo").hidden = true; $("sc-led").classList.remove("on");
   scDraw("scan", `<div class="sc-l">MOVE TO ${BIN.toUpperCase()}?</div><div class="sc-big num">${fmt(total)}</div>
     <div class="sc-list">${things.map((t, i) => `<div class="sc-row${t.care ? " care" : ""}" data-i="${i}" data-tip="${esc(tilde(t.paths[0]) + (t.paths.length > 1 ? ` and ${t.paths.length - 1} more` : ""))}"><span>${esc(t.name)}</span><b class="num">${fmt(t.size)}</b><button class="sc-x" aria-label="Leave ${esc(t.name)} out" data-tip="Leave out">×</button></div>`).join("")}</div>
-    <div class="sc-l dim">${care ? `<span class="warn">${care} ${care === 1 ? "IS" : "ARE"} APP DATA</span> · ` : ""}YOU CAN PUT ${things.length === 1 ? "IT" : "THEM"} BACK</div>`);
+    <div class="sc-l dim">${care ? `<span class="warn">${care} ${care === 1 ? "IS" : "ARE"} APP DATA</span> · ` : ""}YOU CAN PUT ${things.length === 1 ? "IT" : "THEM"} BACK</div>`, fresh ? "" : "still");   // a line left out: the rest stays put
   $("sc-note").hidden = !NATIVE || (() => { try { return localStorage.getItem("rumi-trashed-before") === "1"; } catch { return false; } })();
   if (fresh) { show("confirm"); scOn(); }
   scKeys(["k-b", "Cancel", cfClose], ["k-a", `Move to ${BIN}`, trashConfirmed]);

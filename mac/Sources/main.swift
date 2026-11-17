@@ -304,21 +304,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         decisionHandler(["http", "https", "data", "blob", "about"].contains(scheme) ? .allow : .cancel)
     }
 
-    // WKWebView silently answers confirm()/alert() unless the app shows them.
-    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        // the page passes "Title|Detail|Verb" so the sheet can say what it does ("Empty Trash", not "OK")
-        let parts = message.components(separatedBy: "|")
-        let a = NSAlert(); a.messageText = parts[0]
-        if parts.count > 1 { a.informativeText = parts[1] }
-        a.addButton(withTitle: parts.count > 2 ? parts[2] : "OK"); a.addButton(withTitle: "Cancel")
-        if parts.count > 2 { a.alertStyle = .critical; a.buttons[0].hasDestructiveAction = true }
-        a.beginSheetModal(for: window) { completionHandler($0 == .alertFirstButtonReturn) }
-    }
-    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        let a = NSAlert(); a.messageText = message
-        a.beginSheetModal(for: window) { _ in completionHandler() }
-    }
-
     // MARK: menus
 
     @objc func rescan() { web?.evaluateJavaScript("document.getElementById('rescan').click()") }

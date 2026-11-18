@@ -72,13 +72,14 @@ const ICON = {
   back: `<svg class="i" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>`,
   x: `<svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>`,
   info: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.7M8 5.2v.1"/></svg>`,
+  clock: `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 4.6V8l2.3 1.5"/></svg>`,
   lock: `<svg class="i lk" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>`,
 };
 
 function tile(k, size) {
   const c = color(k.cat), e = ext(k.name || k.path);
   const lbl = k.type === "dir" && !isApp(k) ? ICON.folder : esc((e || "file").slice(0, 4).toUpperCase());
-  if (canThumb(k)) return `<span class="tile withimg" style="--c:${c}">${lbl}<img class="${isApp(k) ? "app" : ""}" data-src="${thumbURL(k.path, 112)}" onload="this.classList.add('ok')" onerror="this.remove();this.parentNode&&this.parentNode.classList.remove('withimg')"></span>`;
+  if (canThumb(k)) return `<span class="tile withimg" style="--c:${c}">${lbl}<img class="${isApp(k) ? "app" : ""}" alt="" data-src="${thumbURL(k.path, 112)}" onload="this.classList.add('ok')" onerror="this.remove();this.parentNode&&this.parentNode.classList.remove('withimg')"></span>`;
   return `<span class="tile" style="--c:${c}">${lbl}</span>`;
 }
 
@@ -114,5 +115,8 @@ document.addEventListener("mouseover", e => {
   const y = r.bottom + 6 + ht > innerHeight - 8 ? r.top - ht - 6 : r.bottom + 6;
   h.style.left = x + "px"; h.style.top = y + "px";
 });
+// the same hint for whatever the keyboard is on
+document.addEventListener("focusin", e => { const el = e.target.closest?.("[data-tip]"); if (el && e.target.matches(":focus-visible")) el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); else { $("hint").hidden = true; hintEl = null; } });
+document.addEventListener("focusout", () => { $("hint").hidden = true; hintEl = null; });
 const dropHint = () => { $("hint").hidden = true; hintEl = null; };
 ["mousedown", "keydown", "wheel"].forEach(t => addEventListener(t, dropHint, { capture: true, passive: true }));

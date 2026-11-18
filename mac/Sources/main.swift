@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     /// The main window and the menu-bar search panel each get one.
     func makeConfig() -> WKWebViewConfiguration {
         let cfg = WKWebViewConfiguration()
+        cfg.preferences.tabFocusesLinks = true   // Tab reaches every button, whatever the Mac's keyboard navigation setting
         cfg.setURLSchemeHandler(scheme, forURLScheme: "rumi")
         cfg.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "rumi")
         // this launch's API token goes to the app's own page only (the viewer's pages are frames, on another origin)

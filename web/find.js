@@ -36,7 +36,7 @@ const fRow = (k, i, q) => {
   const name = label(k), m = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").exec(name) : null;
   const hl = m ? esc(name.slice(0, m.index)) + "<mark>" + esc(m[0]) + "</mark>" + esc(name.slice(m.index + m[0].length)) : esc(name);
   // the full path shows when you point at the name itself; each row has its own Show in Finder button
-  return `<div class="fr ${i === F.sel ? "sel" : ""}" data-i="${i}">${tile(k)}<div class="fm"><b data-tip="${esc(tilde(k.path))}">${hl}</b><small>${esc(whereOf(k.path))}</small></div><span class="num">${k.size ? fmt(k.size) : ""}</span><button class="ffind" data-tip="Show in Finder · ⌘↵" aria-label="Show in Finder">${ICON.finder}</button></div>`;
+  return `<div class="fr ${i === F.sel ? "sel" : ""}" data-i="${i}" id="fr-${i}" role="option" aria-selected="${i === F.sel}">${tile(k)}<div class="fm"><b data-tip="${esc(tilde(k.path))}">${hl}</b><small>${esc(whereOf(k.path))}</small></div><span class="num">${k.size ? fmt(k.size) : ""}</span><button class="ffind" data-tip="Show in Finder · ⌘↵" aria-label="Show in Finder">${ICON.finder}</button></div>`;
 };
 function findDraw() {
   // results that arrive later re-sort the list: the row you moved to stays the one that's picked
@@ -60,12 +60,14 @@ function findDraw() {
   F.sel = keep ? Math.max(0, F.items.findIndex(k => k.path === keep)) : 0;
   let i = 0;
   L.innerHTML = none || sects.map(([title, list]) => `<div class="fh">${title}</div>` + list.map(k => fRow(k, i++, F.q)).join("")).join("");
+  $("f-q").setAttribute("aria-activedescendant", F.items.length ? "fr-" + F.sel : "");
 }
 function findMove(d) {
   if (!F.items.length) return;
   F.moved = true;
   F.sel = (F.sel + d + F.items.length) % F.items.length;
-  $("f-list").querySelectorAll(".fr").forEach(r => r.classList.toggle("sel", +r.dataset.i === F.sel));
+  $("f-list").querySelectorAll(".fr").forEach(r => { r.classList.toggle("sel", +r.dataset.i === F.sel); r.setAttribute("aria-selected", +r.dataset.i === F.sel); });
+  $("f-q").setAttribute("aria-activedescendant", "fr-" + F.sel);
   $("f-list").querySelector(".fr.sel")?.scrollIntoView({ block: "nearest" });
 }
 // ↵ acts on the results for what's typed now; if they're still on their way, it waits for them (up to 3 s)

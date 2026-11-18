@@ -56,7 +56,7 @@
 <body>
 <div class="ds">
   <div class="ds-top"><h1>Rumi</h1><p>Design system · the shipping look is <b>Cartridge</b>. Everything here is drawn with the app's own CSS.</p></div>
-  <nav class="ds-nav"><a href="#rules">Rules</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#shape">Shape</a><a href="#motion">Motion</a><a href="#buttons">Buttons</a><a href="#chips">Chips &amp; menu</a><a href="#cartridges">Cartridges</a><a href="#changed">What changed</a><a href="#rows">List rows</a><a href="#cleanup">Clean up</a><a href="#search">Search</a><a href="#viewer">Viewer</a><a href="#nav">Path &amp; status</a><a href="#open">Open decisions</a></nav>
+  <nav class="ds-nav"><a href="#rules">Rules</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#shape">Shape</a><a href="#motion">Motion</a><a href="#buttons">Buttons</a><a href="#chips">Chips &amp; menu</a><a href="#cartridges">Cartridges</a><a href="#changed">What changed</a><a href="#rows">List rows</a><a href="#cleanup">Clean up</a><a href="#search">Search</a><a href="#viewer">Viewer</a><a href="#nav">Path &amp; status</a><a href="#keys">Keyboard</a><a href="#open">Open decisions</a></nav>
 
   <section class="ds-s" id="rules">
     <h2>Rules</h2>
@@ -209,7 +209,27 @@
     <h3 class="ds-h">Path, plain and filtered</h3>
     <div class="card-ds" id="crumbs-demo" style="display:grid;gap:10px"></div>
     <h3 class="ds-h">Status line (under the map)</h3>
-    <div class="card-ds"><div class="status" style="margin:0"><span class="hint3"><kbd>Esc</kbd> up</span><span><kbd>Space</kbd> preview</span><span><kbd>⌘⌫</kbd> trash</span></div></div>
+    <div class="card-ds"><div class="status" style="margin:0"><span class="hint3"><kbd>←→</kbd> move</span><span class="hint3"><kbd>↵</kbd> open</span><span class="hint3"><kbd>Esc</kbd> up</span><span><kbd>Space</kbd> preview</span><span class="hint3"><kbd>+</kbd> clean up</span><span><kbd>⌘⌫</kbd> bin</span></div></div>
+    <h3 class="ds-h">Untouched</h3>
+    <p class="lead">A filter by age, on the path row: only what hasn't been modified for 6 months, a year or two years. Like the kinds it replaces the map with the matches and fades nothing, and it works with a kind ("Video" and "1 year" are old videos). By itself it shows your own files (not app data, hidden folders or the insides of apps). Colour still means kind: age never recolours the map.</p>
+    <div class="states">
+      <div class="state"><span class="lab">The menu, one age picked</span><div class="kpop static" id="age-demo"></div></div>
+    </div>
+    <div class="spec"><b>Off:</b> a quiet "Untouched" with a clock. <b>On:</b> the age ("1 year+") in a bordered chip beside the kind, then count, size and ✕. <b>Menu:</b> the kinds menu's rows; one choice at a time; sizes are for where you are and the kind that's on.</div>
+  </section>
+
+  <section class="ds-s" id="keys">
+    <h2>Keyboard</h2>
+    <p class="lead">The whole map works without a mouse. The cartridge the keyboard is on has the ink outline every focused control gets, its hover card beside it, and a spoken label for VoiceOver (name, what it is, size, files inside, "picked"). Tab stops on the map once.</p>
+    <div class="card-ds" style="display:grid;grid-template-columns:auto 1fr;gap:8px 18px;align-items:center;max-width:560px">
+      <span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></span><span>Move to the cartridge that way</span>
+      <span><kbd>↵</kbd></span><span>Open: a folder opens, a file shows its card, a photo opens in the viewer</span>
+      <span><kbd>Esc</kbd></span><span>Up a folder; the keyboard lands on the folder you left</span>
+      <span><kbd>+</kbd></span><span>Add to Clean up, or take it out</span>
+      <span><kbd>Space</kbd></span><span>Preview</span>
+      <span><kbd>⌘⌫</kbd></span><span>Move to the Bin</span>
+    </div>
+    <div class="spec"><b>Focus:</b> a 2.5 px ink outline, 2 px off the cartridge; on a folder the ring sits inside and follows its whole outline, tab included, because the tab is cut from the shape. <b>Pointer:</b> moving the mouse over the map takes over again and the outline goes. <b>Menus and cards</b> opened from the keyboard take the focus and give it back on Esc. <b>Hints</b> show for whatever the keyboard is on, the same as on hover. <b>No native tooltips</b> anywhere: they come up late.</div>
   </section>
 
   <section class="ds-s" id="open">
@@ -335,8 +355,11 @@ $("chg-carts").innerHTML = [["Grew", "bigger than last time", chg("up", "Grew", 
 // path
 const sep = `<span class="sep"><svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>`;
 const back = `<button class="back"><svg class="i" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></button>`;
-$("crumbs-demo").innerHTML = `<div class="crumbs" style="margin:0">${back}<button class="c">This Mac</button>${sep}<button class="c">Home</button>${sep}<button class="c cur">Downloads</button><span class="meta"><b class="num">2.4 GB</b></span></div>
-  <div class="crumbs" style="margin:0">${back}<button class="c">This Mac</button>${sep}<button class="c">Home</button>${sep}<button class="c cur">Downloads</button><span class="meta fmeta"><span class="fk"><i style="background:var(--c-docs)"></i>Web pages</span><span class="num">212 files</span><b class="num">88 MB</b><button class="fx"><svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button></span></div>`;
+const CLOCK = `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 4.6V8l2.3 1.5"/></svg>`, TICK = `<svg class="i" viewBox="0 0 16 16"><path d="M3.8 8.4 6.6 11 12.2 5"/></svg>`;
+$("age-demo").innerHTML = `<button class="kr all"><span class="cb">${TICK}</span><span class="kn">Any time</span></button><div class="ksep"></div>`
+  + [["6 months or more", "10.4 GB", ""], ["1 year or more", "4.4 GB", "on"], ["2 years or more", "1.1 GB", ""]].map(([n, z, on]) => `<button class="kr ${on}"><span class="cb">${TICK}</span><span class="kn">${n}</span><span class="ks num">${z}</span></button>`).join("");
+$("crumbs-demo").innerHTML = `<div class="crumbs" style="margin:0">${back}<button class="c">This Mac</button>${sep}<button class="c">Home</button>${sep}<button class="c cur">Downloads</button><span class="meta fmeta"><button class="agebtn">${CLOCK}Untouched</button><span><b class="num">2.4 GB</b></span></span></div>
+  <div class="crumbs" style="margin:0">${back}<button class="c">This Mac</button>${sep}<button class="c">Home</button>${sep}<button class="c cur">Downloads</button><span class="meta fmeta"><span class="fk"><i style="background:var(--c-docs)"></i>Web pages</span><button class="agebtn on">${CLOCK}1 year+</button><span class="num">38 files</span><b class="num">12 MB</b><button class="fx"><svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button></span></div>`;
 </script>
 </body>
 </html>

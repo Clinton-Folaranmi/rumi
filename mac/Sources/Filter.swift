@@ -1,6 +1,8 @@
 // Rumi — filters. A header filter ("Documents → Web pages") swaps the map for just the matching files inside the
 // folder you're in, grouped by the folder they sit in. The kinds mask on every folder says where to look, so only
 // folders that hold a match get listed; everything else is skipped without touching the disk.
+// "Untouched" narrows any of that to what hasn't been modified for some months, and works by itself too: then it's
+// your own files the map keeps (512 KB and up; not inside apps, app data or hidden folders), old enough.
 import Foundation
 import Darwin
 
@@ -9,18 +11,19 @@ enum Filter {
 
     static let PER_GROUP = 60, TOP = 80   // the page keeps as many as fit with a readable name
 
-    /// mask > 0: files of those kinds. mask == 0: a category without kinds (apps, caches, other) by what's in the index.
-    static func json(path: String, mask: UInt32, cat: String) -> (Int, [String: Any]) {
+    /// mask > 0: files of those kinds. mask == 0: a category without kinds (apps, caches, other) by what's in the index,
+    /// or, with no category at all, every kept file (the Untouched filter by itself). Nil if the map isn't ready (409)
+    /// or the folder isn't in it (404).
+    private static func find(path: String, mask: UInt32, cat: String) -> (hits: [Hit], roots: [String])? {
         let S = Store.shared
-        let ci = CATS.firstIndex(of: cat) ?? CAT_OTHER
+        let ci = cat.isEmpty ? -1 : CATS.firstIndex(of: cat) ?? CAT_OTHER
         var hits: [Hit] = [], dirs: [String] = []
         // the tree walk only reads memory, so it runs under the lock (a trash edits the tree); the disk listing doesn't
         S.lock.lock()
-        let top = S.root, n = path.isEmpty ? top : S.index[path], roots = S.roots
+        let n = path.isEmpty ? S.root : S.index[path], roots = S.roots
         if let scope = n { collect(scope, scope.parent != nil ? scope.path : "", mask, ci, &hits, &dirs) }
         S.lock.unlock()
-        guard top != nil else { return (409, ["error": "not ready"]) }
-        guard n != nil else { return (404, ["error": "not found"]) }
+        guard n != nil else { return nil }
         if !dirs.isEmpty {
             let lock = NSLock(), W = min(4, dirs.count)
             DispatchQueue.concurrentPerform(iterations: W) { w in
@@ -29,10 +32,31 @@ enum Filter {
                 lock.lock(); hits += mine; lock.unlock()
             }
         }
-        return (200, group(hits, scope: path, roots: roots, cat: cat, mask: mask))
+        return (hits, roots)
+    }
+    private static func missing(_ path: String) -> (Int, [String: Any]) {
+        Store.shared.lock.lock(); let ready = Store.shared.root != nil; Store.shared.lock.unlock()
+        return ready ? (404, ["error": "not found"]) : (409, ["error": "not ready"])
+    }
+    private static func before(_ days: Int) -> Double { Date().timeIntervalSince1970 - Double(days) * 86400 }
+
+    /// `days` > 0 keeps only what was last modified that long ago or longer.
+    static func json(path: String, mask: UInt32, cat: String, days: Int = 0) -> (Int, [String: Any]) {
+        guard var f = find(path: path, mask: mask, cat: cat) else { return missing(path) }
+        if days > 0 { let cut = before(days); f.hits = f.hits.filter { $0.mtime > 0 && $0.mtime < cut } }
+        return (200, group(f.hits, scope: path, roots: f.roots, cat: cat, mask: mask))
     }
 
-    private static func collect(_ d: Dir, _ p: String, _ mask: UInt32, _ ci: Int, _ hits: inout [Hit], _ dirs: inout [String]) {
+    /// For the Untouched menu: how much (and how many) each age would show, here and with this filter.
+    static func agesJSON(path: String, mask: UInt32, cat: String, days: [Int]) -> (Int, [String: Any]) {
+        guard let f = find(path: path, mask: mask, cat: cat) else { return missing(path) }
+        return (200, ["ages": days.prefix(8).map { d -> [String: Any] in
+            let cut = before(d), old = f.hits.filter { $0.mtime > 0 && $0.mtime < cut }
+            return ["days": d, "count": old.count, "bytes": old.reduce(Int64(0)) { $0 + $1.size }]
+        }])
+    }
+
+    private static func collect(_ d: Dir, _ p: String, _ mask: UInt32, _ ci: Int, _ hits: inout [Hit], _ dirs: inout [String], top: Bool = true) {
         if mask != 0 {
             guard d.kinds & mask != 0 else { return }
             if !p.isEmpty { dirs.append(p) }
@@ -44,11 +68,14 @@ enum Filter {
                 hits.append(Hit(path: p, name: d.name, size: d.size, mtime: d.mtime, cat: CAT_CACHE, dir: true, pkg: false)); return
             default: break
             }
-            if ci != CAT_APP && ci != CAT_CACHE {   // other: the big files the map keeps (512 KB and up)
-                for f in d.files where f.cat == ci { hits.append(Hit(path: p + "/" + f.name, name: f.name, size: f.alloc, mtime: f.mtime, cat: ci, dir: false, pkg: false)) }
+            // any kind: your own files. An app or a library is one thing, not its parts; app data (~/Library) and hidden
+            // folders aren't yours to tidy by hand. Where you are is always looked in, whatever it is.
+            if ci < 0 && (d.pkg || d.name.hasSuffix(".app") || (!top && (d.name.hasPrefix(".") || p == HOME + "/Library"))) { return }
+            if ci != CAT_APP && ci != CAT_CACHE {   // other (or any kind): the big files the map keeps (512 KB and up)
+                for f in d.files where ci < 0 || f.cat == ci { hits.append(Hit(path: p + "/" + f.name, name: f.name, size: f.alloc, mtime: f.mtime, cat: f.cat, dir: false, pkg: false)) }
             }
         }
-        for c in d.dirs { collect(c, c.name.hasPrefix("/") ? c.name : p + "/" + c.name, mask, ci, &hits, &dirs) }
+        for c in d.dirs { collect(c, c.name.hasPrefix("/") ? c.name : p + "/" + c.name, mask, ci, &hits, &dirs, top: top && c.name.hasPrefix("/")) }
     }
 
     /// One folder's own files whose extension is one of the kinds.
@@ -118,7 +145,12 @@ enum Filter {
                 let sorted = v.sorted { $0.size > $1.size }
                 var inner = sorted.prefix(PER_GROUP).map(fileJSON)
                 if var r = rest(sorted.dropFirst(PER_GROUP), "files") { r["open"] = k; inner.append(r) }
-                kids.append(["name": shown(k), "path": k, "size": s, "count": v.count, "type": "dir", "cat": cat, "km": Int(mask),
+                var gcat = cat
+                if cat.isEmpty {   // no kind chosen: the folder takes the colour of most of what's in it
+                    var by = [Int64](repeating: 0, count: CATS.count); for h in v { by[h.cat] += h.size }
+                    gcat = CATS[by.indices.max { by[$0] < by[$1] } ?? CAT_OTHER]
+                }
+                kids.append(["name": shown(k), "path": k, "size": s, "count": v.count, "type": "dir", "cat": gcat, "km": Int(mask),
                              "denied": false, "pkg": false, "hasKids": true, "children": inner, "matches": v.count])
             }
         }
@@ -128,6 +160,6 @@ enum Filter {
             kids.append(["name": "\(commas(n)) more", "size": left.reduce(Int64(0)) { $0 + sz($1) }, "type": "rest", "cat": "other", "n": n])
         }
         return ["count": hits.count, "bytes": total,
-                "node": ["name": "matches", "path": scope, "size": total, "type": "dir", "cat": cat, "children": kids, "hasKids": !kids.isEmpty]]
+                "node": ["name": "matches", "path": scope, "size": total, "type": "dir", "cat": cat.isEmpty ? "other" : cat, "children": kids, "hasKids": !kids.isEmpty]]
     }
 }

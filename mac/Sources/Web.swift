@@ -107,7 +107,9 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
             case "/api/changed": json(Changes.json(path: q["path"] ?? ""))
             case "/api/kinds": json((200, Search.kindsJSON()))
             case "/api/text": json(Pages.text(q["path"] ?? ""))
-            case "/api/filter": json(Filter.json(path: q["path"] ?? "", mask: UInt32(q["mask"] ?? "0") ?? 0, cat: q["cat"] ?? ""))
+            case "/api/filter": json(Filter.json(path: q["path"] ?? "", mask: UInt32(q["mask"] ?? "0") ?? 0, cat: q["cat"] ?? "", days: Int(q["days"] ?? "0") ?? 0))
+            case "/api/ages": json(Filter.agesJSON(path: q["path"] ?? "", mask: UInt32(q["mask"] ?? "0") ?? 0, cat: q["cat"] ?? "",
+                                                   days: (q["days"] ?? "").split(separator: ",").compactMap { Int($0) }.filter { $0 > 0 }))
             case "/api/search":
                 // typing sends a query per pause; ones overtaken by a newer query are skipped
                 let text = (q["q"] ?? "").trimmingCharacters(in: .whitespaces), src = q["src"] ?? "index"

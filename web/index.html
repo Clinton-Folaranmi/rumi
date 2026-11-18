@@ -17,7 +17,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
 <header>
   <div class="top">
     <div class="brand">
-      <span class="mascot" id="brand-rumi" title="Rumi"></span>
+      <span class="mascot" id="brand-rumi" aria-hidden="true"></span>
       Rumi
     </div>
     <div class="spacer"></div>
@@ -26,34 +26,34 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
   </div>
   <div class="dash">
     <div class="hero"><div class="big num" id="hero-used">—</div><div class="sub" id="hero-sub">Reading your disk…</div><button class="chip" id="since" hidden></button></div>
-    <div><div class="diskbar" id="diskbar"></div><div class="chips" id="chips"></div></div>
+    <div><div class="diskbar" id="diskbar" aria-hidden="true"></div><div class="chips" id="chips"></div></div>
   </div>
 </header>
 
 <main>
   <section class="mapcol">
-    <div class="crumbs" id="crumbs"></div>
+    <nav class="crumbs" id="crumbs" aria-label="Folder path"></nav>
     <div id="map"><div class="grainmap"></div></div>
-    <div class="status" id="status"><span class="hint3"><kbd>Esc</kbd> up</span><span class="hint4" id="hint-ql" hidden><kbd>Space</kbd> preview</span><span class="hint5" id="hint-trash" hidden><kbd>⌘⌫</kbd> <span id="hint-trash-l">trash</span></span></div>
+    <div class="status" id="status"><span class="hint3"><kbd>←→</kbd> move</span><span class="hint3"><kbd>↵</kbd> open</span><span class="hint3"><kbd>Esc</kbd> up</span><span class="hint4" id="hint-ql" hidden><kbd>Space</kbd> preview</span><span class="hint3"><kbd>+</kbd> clean up</span><span class="hint5" id="hint-trash" hidden><kbd>⌘⌫</kbd> <span id="hint-trash-l">trash</span></span></div>
   </section>
   <aside>
-    <div class="seg" id="tabs">
-      <button data-tab="cleanup" class="on">Clean up<span class="badge num" id="b-cleanup">&nbsp;</span></button>
-      <button data-tab="dupes">Duplicates<span class="badge num" id="b-dupes">&nbsp;</span></button>
-      <button data-tab="biggest">Biggest<span class="badge">files</span></button>
-      <button data-tab="folder">Folder<span class="badge" id="b-folder">contents</span></button>
+    <div class="seg" id="tabs" role="tablist" aria-label="Lists">
+      <button data-tab="cleanup" role="tab" class="on">Clean up<span class="badge num" id="b-cleanup">&nbsp;</span></button>
+      <button data-tab="dupes" role="tab">Duplicates<span class="badge num" id="b-dupes">&nbsp;</span></button>
+      <button data-tab="biggest" role="tab">Biggest<span class="badge">files</span></button>
+      <button data-tab="folder" role="tab">Folder<span class="badge" id="b-folder">contents</span></button>
     </div>
-    <div class="pane" id="pane"></div>
+    <div class="pane" id="pane" role="tabpanel"></div>
   </aside>
 </main>
 
-<div class="tray" id="tray">
-  <div class="info"><b class="num" id="tray-size">0 GB</b><div id="tray-count">0 items</div></div>
+<div class="tray" id="tray" role="region" aria-label="Picked for Clean up">
+  <div class="info" aria-live="polite"><b class="num" id="tray-size">0 GB</b><div id="tray-count">0 items</div></div>
   <button class="btn ghost" id="tray-clear">Clear</button>
   <button class="btn primary" id="tray-go"><svg class="i" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg><span id="tray-go-l"></span></button>
 </div>
 
-<div class="overlay" id="scanning" hidden>
+<div class="overlay" id="scanning" role="dialog" aria-labelledby="scan-h" hidden>
   <div class="scan">
     <div class="scan-rumi" id="scan-rumi"></div>
     <h2 id="scan-h">Mapping your Mac</h2>
@@ -62,7 +62,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
   </div>
 </div>
 
-<div class="overlay" id="access" hidden>
+<div class="overlay" id="access" role="dialog" aria-modal="true" aria-labelledby="access-h" hidden>
   <div class="welcome">
     <div class="shelf" aria-hidden="true"><span class="mascot" id="access-rumi"></span><i style="--c:var(--c-image)"></i><i style="--c:var(--c-video)"></i><i style="--c:var(--c-dev)"></i><i style="--c:var(--c-audio)"></i></div>
     <h2 id="access-h">Let Rumi see your whole Mac</h2>
@@ -72,7 +72,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
   </div>
 </div>
 
-<div class="overlay" id="confirm" hidden>
+<div class="overlay" id="confirm" role="dialog" aria-modal="true" aria-label="Move to the Bin" hidden>
   <div class="binbox">
     <div class="sc" id="sc">
       <div class="sc-ridges"><i></i><i></i><i></i></div>
@@ -102,28 +102,29 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
   </div>
 </div>
 
-<div class="viewer" id="viewer" hidden>
+<div class="viewer" id="viewer" role="dialog" aria-labelledby="v-name" hidden>
   <div class="vtop">
     <div class="vt"><b id="v-name"></b><span id="v-meta" class="num"></span></div>
     <div class="vseg" id="v-mode" hidden><button data-m="page">Page</button><button data-m="code">Code</button></div>
-    <button class="btn ghost vi" id="v-app" data-tip="Open in its app"></button>
-    <button class="btn ghost vi" id="v-finder" data-tip="Show in Finder"></button>
+    <button class="btn ghost vi" id="v-app" data-tip="Open in its app" aria-label="Open in its app"></button>
+    <button class="btn ghost vi" id="v-finder" data-tip="Show in Finder" aria-label="Show in Finder"></button>
     <button class="btn small" id="v-pick"></button>
-    <button class="btn ghost vi" id="v-trash" data-tip="Move to Trash · ⌘⌫"></button>
-    <button class="btn ghost vi" id="v-x" data-tip="Close · Esc"></button>
+    <button class="btn ghost vi" id="v-trash" data-tip="Move to Trash · ⌘⌫" aria-label="Move to Trash"></button>
+    <button class="btn ghost vi" id="v-x" data-tip="Close · Esc" aria-label="Close"></button>
   </div>
   <div class="vstage" id="v-stage"><div class="vframe" id="v-frame"></div>
     <button class="vnav prev" id="v-prev" aria-label="Previous"></button><button class="vnav next" id="v-next" aria-label="Next"></button></div>
 </div>
-<div class="find" id="find" hidden><div class="fbox">
-  <div class="fin"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><input id="f-q" placeholder="Search files and folders" spellcheck="false" autocomplete="off"><span id="f-n" class="num"></span></div>
-  <div class="flist" id="f-list"></div>
+<div class="find" id="find" role="dialog" aria-label="Search" hidden><div class="fbox">
+  <div class="fin"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><input id="f-q" placeholder="Search files and folders" aria-label="Search files and folders" role="combobox" aria-expanded="true" aria-controls="f-list" spellcheck="false" autocomplete="off"><span id="f-n" class="num"></span></div>
+  <div class="flist" id="f-list" role="listbox" aria-label="Results"></div>
   <div class="ffoot"><span><kbd>↵</kbd> open</span><span><kbd>⌘↵</kbd> show in Finder</span><span><kbd>⌥↵</kbd> show on map</span><span><kbd>esc</kbd> close</span></div>
 </div></div>
-<div class="kpop" id="kpop" hidden></div>
-<div class="tip" id="tip" hidden></div>
-<div class="insp" id="insp" hidden></div>
-<div class="toast" id="toast" hidden></div>
+<div class="kpop" id="kpop" role="menu" hidden></div>
+<div class="tip" id="tip" aria-hidden="true" hidden></div>
+<div class="insp" id="insp" role="dialog" aria-label="Details" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="say" id="say" role="status" aria-live="polite"></div>
 <div class="hint" id="hint" hidden></div>
 
 <script src="/rumi.js"></script>
@@ -205,6 +206,8 @@ let current = "";
 let treeCache = new Map();
 let overview = null, sugg = null, dupes = null, status = null, lastCrumbs = [];
 let focusCat = null;
+let focusAge = 0;            // days: the map shows only what hasn't been modified for that long (0: off)
+const filtering = () => !!focusCat || focusAge > 0;
 let changedOn = false;       // the map shows only what changed since last time
 const picked = new Map();    // path -> size
 const meta = new Map();      // path -> item (for tiles in confirm list)
@@ -284,7 +287,8 @@ function syncSelection() {
     if (el.tagName === "INPUT") { if (el.checked !== on) el.checked = on; continue; }
     if (el.classList.contains("sel") === on) continue;
     el.classList.toggle("sel", on);
-    const pk = el.querySelector(":scope > .pick"); if (pk) pk.innerHTML = on ? ICON.check : ICON.plus;
+    if (el._say) el.setAttribute("aria-label", el._say + (on ? ", picked" : ""));
+    const pk = el.querySelector(":scope > .pick"); if (pk) { pk.innerHTML = on ? ICON.check : ICON.plus; pk.setAttribute("aria-pressed", on); }
   }
 }
 
@@ -304,11 +308,11 @@ function drawHeader() {
     if (bytes <= 0) return;
     const el = document.createElement("div");
     el.style.flex = `0 0 calc(${(bytes / d.total) * 100}% - 2px)`; el.style.background = col; if (col) el.style.setProperty("--seg", col);
-    el.className = (cls || "") + (focusCat === key ? " on" : ""); el.title = `${lbl} — ${fmt(bytes)}`;
+    el.className = (cls || "") + (focusCat === key ? " on" : ""); el.dataset.tip = `${lbl} · ${fmt(bytes)}`;
     if (key === "hidden") { el.dataset.hidden = 1; el.onclick = openHidden; }
     bar.appendChild(el);
     const interactive = key && (CAT[key] || key === "hidden");
-    chips.insertAdjacentHTML("beforeend", `<${interactive ? "button" : "span"} class="chip ${interactive ? "" : "static"} ${focusCat === key ? "on" : ""}" ${interactive ? (key === "hidden" ? "data-hidden" : `data-cat="${key}"`) : ""}>
+    chips.insertAdjacentHTML("beforeend", `<${interactive ? "button" : "span"} class="chip ${interactive ? "" : "static"} ${focusCat === key ? "on" : ""}" ${interactive ? (key === "hidden" ? "data-hidden" : `data-cat="${key}" aria-pressed="${focusCat === key}"`) : ""}>
       <i style="background:${cls === "free" ? "var(--rest1)" : col}"></i>${esc(focusCat === key && focusKinds.size ? KINDS.filter(k => focusKinds.has(k.id)).map(k => k.label).join(", ") : lbl)} <b class="num">${fmt(focusCat === key && focusKinds.size ? KINDS.filter(k => focusKinds.has(k.id)).reduce((s, k) => s + k.bytes, 0) : bytes)}</b></${interactive ? "button" : "span"}>`);
   };
   let scanned = 0;
@@ -343,14 +347,14 @@ function drawSince() {
 }
 $("since").onclick = () => setChanged(!changedOn);
 function setChanged(on) {
-  changedOn = on; if (on) { focusCat = null; focusKinds = new Set(); closeKinds(); }
+  changedOn = on; if (on) { focusCat = null; focusKinds = new Set(); focusAge = 0; closeKinds(); }
   drawHeader(); markOpenChip(); open(current, null, "filter");
 }
 $("chips").addEventListener("click", e => {
   if (e.target.closest("[data-hidden]")) return openHidden();
   const b = e.target.closest("button[data-cat]"); if (!b) return;
   if (!$("kpop").hidden && $("kpop")._cat === b.dataset.cat) return closeKinds();
-  if (openKinds(b, b.dataset.cat)) return;
+  if (openKinds(b, b.dataset.cat, e.detail === 0)) return;
   closeKinds(); setFocus(focusCat === b.dataset.cat ? null : b.dataset.cat);
 });
 
@@ -383,9 +387,12 @@ function squarify(items, x, y, w, h, wt = wOf) {
 let filterCache = new Map();
 const filterMask = () => focusKinds.size ? [...focusKinds].reduce((m, id) => m | (1 << id), 0) : KINDS.filter(k => k.cat === focusCat).reduce((m, k) => m | (1 << k.id), 0);
 const filterName = () => focusKinds.size ? KINDS.filter(k => focusKinds.has(k.id)).map(k => k.label).join(", ") : CAT[focusCat];
+// "Untouched": not modified for this long. The menu's wording, and the short form the button shows when it's on.
+const AGES = [[182, "6 months"], [365, "1 year"], [730, "2 years"]];
+const ageName = (d = focusAge) => (AGES.find(a => a[0] === d) || [0, Math.round(d / 30) + " months"])[1];
 function getFilter(path) {
-  const key = `${path}|${focusCat}|${filterMask()}`;
-  return recall(filterCache, key) || remember(filterCache, key, api(`/api/filter?path=${encodeURIComponent(path)}&cat=${focusCat}&mask=${filterMask()}`)
+  const key = `${path}|${focusCat}|${filterMask()}|${focusAge}`;
+  return recall(filterCache, key) || remember(filterCache, key, api(`/api/filter?path=${encodeURIComponent(path)}&cat=${focusCat || ""}&mask=${filterMask()}&days=${focusAge}`)
     .catch(e => { filterCache.delete(key); throw Object.assign(e instanceof Error ? e : new Error(String(e)), { filter: true }); }), CAP.filter);
 }
 function getChanged(path) {
@@ -398,7 +405,7 @@ function getChanged(path) {
 async function getView(path) {
   const data = await getTree(path);
   if (changedOn) { const c = await getChanged(path); return { ...data, node: Object.assign(c.node, { sys: c.sys }), full: data.node, changed: c }; }
-  if (!focusCat) return data;
+  if (!filtering()) return data;
   const f = await getFilter(path);
   return { ...data, node: f.node, full: data.node, filter: f };
 }
@@ -438,9 +445,9 @@ async function doOpen(path, fromEl, how) {
   let data;
   try { data = await getView(path); }
   catch (e) {
-    if (!(e.filter && (focusCat || changedOn))) { toast("Couldn't open that folder: " + esc(e.message)); return; }
+    if (!(e.filter && (filtering() || changedOn))) { toast("Couldn't open that folder: " + esc(e.message)); return; }
     const what = changedOn ? "Couldn't show changes: " : "Couldn't filter: ";
-    focusCat = null; focusKinds = new Set(); changedOn = false; drawHeader(); if (!$("kpop").hidden) $("kpop")._draw?.(); markOpenChip();
+    focusCat = null; focusKinds = new Set(); focusAge = 0; changedOn = false; drawHeader(); if (!$("kpop").hidden) $("kpop")._draw?.(); markOpenChip();
     toast(what + esc(e.message), 4000);
     try { data = await getView(path); } catch (e2) { toast("Couldn't open that folder: " + esc(e2.message)); return; }
   }
@@ -461,6 +468,7 @@ async function doOpen(path, fromEl, how) {
   }
   // where the folder sits on the outer map: the cartridge clicked, or the one on the path between the two levels
   const deep = into ? path : from, outer = into ? old : null;
+  kbFrom = from;
   const spot = (layer, p) => [...(layer?.querySelectorAll(".b[data-path]") || [])].filter(b => p === b.dataset.path || p.startsWith(b.dataset.path + "/")).sort((a, b) => b.dataset.path.length - a.dataset.path.length)[0];
   let rect = null;
   if (animate && into) { const el = fromEl?.isConnected ? fromEl : spot(outer, deep); if (el) rect = relRect(el, map); }
@@ -519,7 +527,7 @@ function zoom(map, old, fresh, r, into) {
 
 const C_SEP = `<svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M6 3.5 10.5 8 6 12.5"/></svg>`;
 function drawCrumbs(data) {
-  lastCrumbs = data.crumbs;
+  lastCrumbs = data.crumbs; dropHint();   // the row is rebuilt: a hint for one of its buttons would be left hanging
   $("crumbs").classList.remove("fit");
   const c = $("crumbs"), parent = data.crumbs.length > 1 ? data.crumbs.at(-2).path : null;
   c.innerHTML = `<button class="back" ${parent === null ? "disabled" : ""} aria-label="Up a folder">${ICON.back}</button>`;
@@ -534,9 +542,10 @@ function drawCrumbs(data) {
   c.insertAdjacentHTML("beforeend", ch
     ? `<span class="meta fmeta"><span class="fk"><i style="background:var(${ch.net < 0 ? "--c-down" : "--c-up"})"></i>Changed since ${esc(sinceDay(ch.since))}</span><b class="num">${sgn(ch.net)}</b><button class="fx" data-tip="Show everything" aria-label="Show everything">${ICON.x}</button></span>`
     : f
-    ? `<span class="meta fmeta"><span class="fk"><i style="background:${color(focusCat)}"></i>${esc(filterName())}</span><span class="num">${f.count.toLocaleString()} ${{ app: "app", cache: "folder" }[focusCat] || "file"}${f.count === 1 ? "" : "s"}</span><b class="num">${fmt(f.bytes)}</b><button class="fx" data-tip="Show everything" aria-label="Show everything">${ICON.x}</button></span>`
-    : `<span class="meta" data-tip="${data.node.count.toLocaleString()} files"><b class="num">${fmt(data.node.size)}</b></span>`);
-  c.querySelector(".fx")?.addEventListener("click", () => changedOn ? setChanged(false) : setFocus(null));
+    ? `<span class="meta fmeta">${focusCat ? `<span class="fk"><i style="background:${color(focusCat)}"></i>${esc(filterName())}</span>` : ""}${ageBtn()}<span class="num">${f.count.toLocaleString()} ${{ app: "app", cache: "folder" }[focusCat] || "file"}${f.count === 1 ? "" : "s"}</span><b class="num">${fmt(f.bytes)}</b><button class="fx" data-tip="Show everything" aria-label="Show everything">${ICON.x}</button></span>`
+    : `<span class="meta fmeta">${ageBtn()}<span data-tip="${data.node.count.toLocaleString()} files"><b class="num">${fmt(data.node.size)}</b></span></span>`);
+  c.querySelector(".fx")?.addEventListener("click", () => changedOn ? setChanged(false) : clearFilters());
+  c.querySelector("#age-btn")?.addEventListener("click", e => { if (!$("kpop").hidden && $("kpop")._cat === "age") closeKinds(); else openAges(e.currentTarget, e.detail === 0); });
   badge("b-folder", fmt((data.full || data.node).size));
   // too long for the row: hide middle levels behind "…", like Finder's path bar
   const cs = [...c.querySelectorAll(".c")];
@@ -544,12 +553,18 @@ function drawCrumbs(data) {
   for (let i = 1; i < cs.length - 1 && c.scrollWidth > c.clientWidth; i++) { cs[i].hidden = true; cs[i].previousElementSibling.hidden = true; hidden.push(data.crumbs[i]); }
   c.classList.add("fit");   // only now may the current name shrink, if it still doesn't fit
   if (hidden.length) {
-    const more = document.createElement("button"); more.className = "c more"; more.textContent = "…"; more.title = hidden.map(h => rootName(h.name)).join(" › ");
+    const more = document.createElement("button"); more.className = "c more"; more.textContent = "…"; more.dataset.tip = hidden.map(h => rootName(h.name)).join(" › "); more.setAttribute("aria-label", "More folders in the path");
     more.onclick = e => { e.stopPropagation(); crumbMenu(more, hidden); };
     cs[0].after(Object.assign(document.createElement("span"), { className: "sep", innerHTML: C_SEP }), more);
   }
   if (NATIVE) NATIVE.postMessage({ path: "/native/title", body: { title: rootName(data.crumbs.at(-1).name) || "Rumi" } }).catch(() => {});
+  // spoken once per place and filter: a quiet redraw of the same view says nothing
+  const here = rootName(data.crumbs.at(-1).name), view = [current, changedOn, focusCat, filterMask(), focusAge].join("|");
+  if (view !== saidView) { saidView = view; say(ch ? `${here}: changed since ${sinceDay(ch.since)}, ${sgn(ch.net)}`
+    : f ? `${here}: ${[focusCat ? filterName() : "", focusAge ? `untouched for ${ageName()} or more` : ""].filter(Boolean).join(", ")}, ${f.count.toLocaleString()} found, ${fmt(f.bytes)}`
+    : `${here}, ${fmt(data.node.size)}`); }
 }
+let saidView = null;
 function crumbMenu(anchor, items) {
   document.querySelector(".crumbmenu")?.remove();
   const m = document.createElement("div"); m.className = "crumbmenu";
@@ -566,6 +581,7 @@ function drawMap(node, anim) {
   // the layer is the window the folder is seen through; its .lc holds the cartridges (they move separately when a folder opens)
   const layer = document.createElement("div"); layer.className = "layer" + (anim ? " " + anim : "");
   const lc = layer.appendChild(Object.assign(document.createElement("div"), { className: "lc" }));
+  lc.setAttribute("role", "group"); lc.setAttribute("aria-label", `${rootName(lastCrumbs.at(-1)?.name || "This Mac")}, ${fmt(node.size)}. Arrow keys move, Return opens.`);
   const C = LAYOUT, W = map.clientWidth, H = map.clientHeight, G = C.gap;
   // "f": a filter's matches. "c": what changed. Both show only some of the folder, in tiles big enough to read.
   const mode = node.name === "matches" ? "f" : node.name === "changes" ? "c" : "";
@@ -580,8 +596,8 @@ function drawMap(node, anim) {
     return;
   }
   if (!kids.length && mode === "f") {
-    map.insertAdjacentHTML("afterbegin", `<div class="emptymap"><div>${Rumi.svg("empty", { size: 104 })}<b>No ${esc(filterName().toLowerCase())} here</b><button class="btn small" style="margin-top:12px">Show everything</button></div></div>`);
-    map.querySelector(".emptymap button").onclick = () => setFocus(null);
+    map.insertAdjacentHTML("afterbegin", `<div class="emptymap"><div>${Rumi.svg("empty", { size: 104 })}<b>${focusCat ? "No " + esc(filterName().toLowerCase()) : "Nothing"}${focusAge ? " untouched for " + ageName() : ""} here</b><button class="btn small" style="margin-top:12px">Show everything</button></div></div>`);
+    map.querySelector(".emptymap button").onclick = clearFilters;
     return;
   }
   if (!kids.length) {
@@ -649,6 +665,7 @@ function drawMap(node, anim) {
     setTimeout(() => layer.classList.remove("boot"), 1000);
   }
   syncSelection();
+  kbLand();
 }
 
 function block(k, x, y, w, h, cls, i, par) {
@@ -672,6 +689,9 @@ function block(k, x, y, w, h, cls, i, par) {
   const C = LAYOUT;
   if (k.path) { el.dataset.path = k.path; keepMeta(k.path, k); }
   if (k.type === "dir" && k.km != null) el.dataset.km = k.km;
+  // for the keyboard and VoiceOver: a tray is a group; a cartridge is a button that says what it is and how big
+  el._say = sayBlock(k); el.setAttribute("aria-label", el._say);
+  if (cls.includes("container")) el.setAttribute("role", "group"); else { el.setAttribute("role", "button"); el.tabIndex = -1; }
   let name = rest ? (ch ? `${k.name} · ${sgn(k.d || 0)}` : `${String(k.name).replace(/ items$/, "")} · ${fmt(k.size)}`) : label(k);
   // the stripe: on a tray it's a line under the name; on a folder cartridge it sits on the label, when there's room below the size
   const stripe = !ch && isFolderK(k) && Array.isArray(k.mx);
@@ -684,9 +704,9 @@ function block(k, x, y, w, h, cls, i, par) {
         const [top, bottom] = C.iconBox(w, h), room = h - top - bottom;
         const s = Math.round(Math.min(C.iconMax, w * C.iconW, room * 0.9));
         if (s >= 20) el.classList.add("hasic");
-        if (s >= 20) el.insertAdjacentHTML("beforeend", `<img class="ic" width="${s}" height="${s}" style="top:${top + room / 2}px" data-src="${thumbURL(k.path)}" onload="this.classList.add('ok')" onerror="this.remove()">`);
+        if (s >= 20) el.insertAdjacentHTML("beforeend", `<img class="ic" alt="" width="${s}" height="${s}" style="top:${top + room / 2}px" data-src="${thumbURL(k.path)}" onload="this.classList.add('ok')" onerror="this.remove()">`);
       } else if (PHOTO_EXT.has(ext(k.name)) || ext(k.name) === "pdf") {
-        el.insertAdjacentHTML("beforeend", `<img class="ph" data-src="${thumbURL(k.path)}" onload="this.classList.add('ok');this.parentNode.classList.add('hasph')" onerror="this.remove()">`);
+        el.insertAdjacentHTML("beforeend", `<img class="ph" alt="" data-src="${thumbURL(k.path)}" onload="this.classList.add('ok');this.parentNode.classList.add('hasph')" onerror="this.remove()">`);
       }
     }
     // names wrap only at . _ - and spaces; a word too long for the label stays on one line with an ellipsis
@@ -717,8 +737,8 @@ function block(k, x, y, w, h, cls, i, par) {
     }
     if (stripe && !rest && (sm ? w >= 60 && h >= 72 : h >= 128)) el.insertAdjacentHTML("beforeend", mixHTML(k, "mixbar"));
   }
-  if (k.path && w > 34 && h > 34 && !ownerOf(k.path)) {
-    const p = document.createElement("button"); p.className = "pick"; p.innerHTML = ICON.plus; p.setAttribute("aria-label", "Add to Clean up");
+  if (k.path && w > 34 && h > 34 && !ownerOf(k.path) && !keepFolder(k.path)) {   // no + on what Rumi won't remove (Library, Documents…)
+    const p = document.createElement("button"); p.className = "pick"; p.innerHTML = ICON.plus; p.tabIndex = -1; p.setAttribute("aria-label", `Add ${label(k)} to Clean up`); p.setAttribute("aria-pressed", "false");
     p.onclick = e => { e.stopPropagation(); toggle(k.path, k.size, undefined, k); popOnce(p); };
     el.appendChild(p);
   }
@@ -742,6 +762,14 @@ function block(k, x, y, w, h, cls, i, par) {
   return el;
 }
 let pre;
+// what VoiceOver reads for a cartridge: its name, what it is, its size, and how many files a folder holds
+function sayBlock(k) {
+  if (k.type === "hidden") return `macOS keeps this, locked, ${fmt(k.size)}`;
+  if (k.type === "rest") return `${k.name}, ${fmt(k.size)}, smaller ${k.ch ? "changes" : "items"}, grouped`;
+  const what = k.ch ? `${chKind(k)} ${chAmt(k)}` : isApp(k) ? "app" : k.type === "dir" ? "folder" : CAT[k.cat] || "Other";
+  const owner = k.path && ownerOf(k.path);
+  return [label(k), what, k.ch ? "" : fmt(k.size), isFolderK(k) && k.count ? `${k.count.toLocaleString()} files` : "", owner ? `part of ${owner}` : ""].filter(Boolean).join(", ");
+}
 // the hover card shows at once (no delay); its size is measured only when its content changes, not on every move
 function hoverTip(e, k) {
   const t = $("tip");
@@ -776,8 +804,8 @@ function row(o) {
     <div class="nm"><div class="t"><span class="tt">${esc(title)}</span><span class="tag open">Open</span></div><div class="why">Quit ${esc(openApp)} first</div></div>
     <div class="sz num">${fmt(size)}</div></div>`;
   return `<div class="row${owner ? " locked" : ""}" ${owner ? "" : `data-row="${esc(path)}"`} data-size="${size}">
-    ${owner ? `<span class="lock" title="Part of ${esc(owner)}"><svg class="i" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg></span>`
-            : `<input type="checkbox" aria-label="Add ${esc(title)} to Clean up" data-path="${esc(path)}" data-size="${size}" ${picked.has(path) ? "checked" : ""}>`}
+    ${owner ? `<span class="lock" data-tip="Part of ${esc(owner)}"><svg class="i" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg></span>`
+            : `<input type="checkbox" aria-label="${esc(title)}, ${fmt(size)}. Add to Clean up" data-path="${esc(path)}" data-size="${size}" ${picked.has(path) ? "checked" : ""}>`}
     ${path === TRASH() ? `<span class="tile" style="--c:var(--c-other)"><svg class="i" viewBox="0 0 16 16" style="width:17px;height:17px"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg></span>` : icon}
     <div class="nm"><div class="t"><span class="tt${rtl ? " rtl" : ""}" data-tip="${esc(tilde(path))}">${rtl ? "‎" : ""}${esc(title)}${rtl ? "‎" : ""}</span>${owner ? `<span class="tag keep long">Part of ${esc(owner.replace(/'s data$/, ""))}</span>` : tag ? `<span class="tag ${tag}">${tagText || TAG[tag]}</span>` : ""}</div>
       ${why ? `<div class="why">${esc(why)}</div>` : sub ? `<div class="p">‎${esc(sub)}‎</div>` : ""}</div>
@@ -790,7 +818,7 @@ const TAG = { safe: "Safe", review: "Check first", keep: "Won't touch" };
 // Something Rumi doesn't clear itself: the row opens a card that says how (so does "How to", which shows on hover like
 // Finder does on the other rows). No checkbox, it can't be picked.
 function howRow({ path, size, title, why, tag }, icon) {
-  return `<div class="row nochk how" data-how="${esc(path)}">${icon}
+  return `<div class="row nochk how" data-how="${esc(path)}" role="button" tabindex="0" aria-label="${esc(title)}, ${fmt(size)}. How to clear it">${icon}
     <div class="nm"><div class="t"><span class="tt" data-tip="${esc(tilde(path))}">${esc(title)}</span><span class="tag ${tag}">${TAG[tag]}</span></div><div class="why">${esc(why)}</div></div>
     <div class="sz num">${fmt(size)}</div>
     <div class="hov"><button>${ICON.info}How to</button><button data-reveal="${esc(path)}">${ICON.finder}Finder</button></div></div>`;
@@ -798,7 +826,7 @@ function howRow({ path, size, title, why, tag }, icon) {
 // A row that belongs to an app: the app's icon takes the folder's place on the cartridge's label, which is quicker to
 // find than a name. If the app can't be found it stays a folder.
 function appTile(app, item) {
-  return `<span class="tile withimg" style="--c:${color(item.cat)}">${ICON.folder}<img class="app" data-src="${thumbURL(app, 112)}" onload="this.classList.add('ok')" onerror="this.remove()"></span>`;
+  return `<span class="tile withimg" style="--c:${color(item.cat)}">${ICON.folder}<img class="app" alt="" data-src="${thumbURL(app, 112)}" onload="this.classList.add('ok')" onerror="this.remove()"></span>`;
 }
 // Things that belong to an app: inside an .app / library package, or deep inside an app's data folder.
 // Rumi shows them but won't put them in the Trash (the Mac side refuses too).
@@ -844,7 +872,7 @@ const GROUP_NAME = g => g === "How to" ? "Clear these yourself" : g === "Trash" 
 let paneSeq = 0, dupesPoll = 0;
 async function drawPane(rise) {
   const seq = ++paneSeq, want = tab, live = () => seq === paneSeq && want === tab;
-  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelectorAll("#tabs button").forEach(b => { b.classList.toggle("on", b.dataset.tab === tab); b.setAttribute("aria-selected", b.dataset.tab === tab); });
   movePill();
   const pane = $("pane");
   if (!status?.ready) { pane.innerHTML = `<div class="empty">${Rumi.svg("scan", { size: 84 })}Scanning…</div>`; return; }
@@ -921,7 +949,7 @@ async function drawPaneBody(pane, live) {
       g.files.forEach((f, i) => {
         keepMeta(f.path, asItem(f.path, g.cat));
         // the copy Rumi keeps can't be ticked, so a set can never lose every copy
-        b += i === 0 ? `<div class="row keeprow" data-size="${f.size}"><span class="lock" title="Rumi keeps this copy">${ICON.check}</span>`
+        b += i === 0 ? `<div class="row keeprow" data-size="${f.size}"><span class="lock" data-tip="Rumi keeps this copy">${ICON.check}</span>`
           : `<div class="row" data-row="${esc(f.path)}" data-size="${f.size}"><input type="checkbox" aria-label="Remove this copy" data-path="${esc(f.path)}" data-size="${f.size}" ${picked.has(f.path) ? "checked" : ""}>`;
         b += `
           <div class="nm"><div class="t"><span class="tt" data-tip="${esc(tilde(f.path))}">${esc(base(f.path))}</span>${apart[i] ? `<span class="in">${esc(apart[i] === base(HOME) ? "Home" : apart[i])}</span>` : ""}${i === 0 ? `<span class="tag keep">${keepLabel}</span>` : ""}</div></div>
@@ -970,6 +998,8 @@ $("pane").addEventListener("click", e => {
     popOnce(rw.querySelector("input"));
   }
 });
+// a how-to row from the keyboard
+$("pane").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches(".row.how")) { e.preventDefault(); e.stopPropagation(); e.target.click(); } });
 $("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const changed = tab !== b.dataset.tab; if (changed) $("pane").scrollTop = 0; tab = b.dataset.tab; drawPane(changed); });
 
 /* ---------- actions ---------- */
@@ -977,7 +1007,11 @@ const reveal = p => api("/api/reveal", { path: p }).catch(() => {});
 
 /* ---------- details card for a file ---------- */
 let inspEl = null;
-function closeInsp() { $("insp").hidden = true; if (inspEl) inspEl.classList.remove("inspected"); inspEl = null; }
+function closeInsp() {
+  const p = $("insp"), back = !p.hidden && p.contains(document.activeElement) ? inspEl : null;
+  p.hidden = true; if (inspEl) inspEl.classList.remove("inspected"); inspEl = null;
+  back?.focus({ preventScroll: true });
+}
 function inspect(k, el) {
   const p = $("insp");
   if (inspEl === el && !p.hidden) return closeInsp();
@@ -992,9 +1026,10 @@ function inspect(k, el) {
         ${ownerOf(k.path) ? "" : `<button class="btn ${on ? "" : "primary"}" data-a="pick">${on ? ICON.check + "Added" : ICON.plus + "Add to Clean up"}</button>`}</div>`;
     p.querySelector(".x").onclick = closeInsp;
     p.querySelector('[data-a="reveal"]').onclick = () => reveal(k.path);
-    const pk = p.querySelector('[data-a="pick"]'); if (pk) pk.onclick = () => { toggle(k.path, k.size, undefined, k); draw(); };
+    const pk = p.querySelector('[data-a="pick"]'); if (pk) pk.onclick = () => { const had = pk.matches(":focus-visible"); toggle(k.path, k.size, undefined, k); draw(); if (had) p.querySelector('[data-a="pick"]').focus(); };
   };
   draw(); p.hidden = false;
+  if (el.matches(":focus-visible")) (p.querySelector('[data-a="pick"]') || p.querySelector('[data-a="reveal"]')).focus();
   const r = el.getBoundingClientRect(), pw = p.offsetWidth, ph = p.offsetHeight, m = 12;
   let x = r.right + m; if (x + pw > innerWidth - m) x = r.left - pw - m; if (x < m) x = Math.min(Math.max(m, r.left), innerWidth - pw - m);
   let y = Math.min(Math.max(m, r.top), innerHeight - ph - m);
@@ -1258,7 +1293,7 @@ async function findGo(k, mode) {
     closeFind(); recent.add(k); return;
   }
   closeFind(); recent.add(k);
-  if (focusCat || changedOn) { focusCat = null; focusKinds = new Set(); changedOn = false; drawHeader(); if (current === dirOf(k.path) || isFolder(k)) await open(current, null, "filter"); }
+  if (filtering() || changedOn) { focusCat = null; focusKinds = new Set(); focusAge = 0; changedOn = false; drawHeader(); if (current === dirOf(k.path) || isFolder(k)) await open(current, null, "filter"); }
   if (isFolder(k) && !onMap) return open(k.path);
   const parent = dirOf(k.path);
   if (!(await getTree(parent).catch(() => null))) { reveal(k.path); return; }   // not on the map (inside an app or a private folder)
@@ -1281,35 +1316,69 @@ async function loadKinds() {
   const r = await api("/api/kinds").catch(() => null); if (!r) return;
   KINDS = r.kinds; KIND_EXT = {}; for (const k of KINDS) for (const e of k.exts) KIND_EXT[e] = k.id;
 }
-function openKinds(btn, cat) {
+function openKinds(btn, cat, keyboard) {
   const ks = KINDS.filter(k => k.cat === cat && k.count > 0).sort((a, b) => b.bytes - a.bytes);
   if (!ks.length) return false;
   // a row is just the name and its size; which file types it covers and how many files show on hover
-  const p = $("kpop"), draw = () => {
+  const p = $("kpop"), draw = () => kpopKeep(() => {
     const allOn = focusCat === cat && !focusKinds.size;
-    p.innerHTML = `<button class="kr all ${allOn ? "on" : ""}" data-all><span class="cb">${ICON.check}</span><span class="kn">All ${esc(CAT[cat].toLowerCase())}</span><span class="ks num">${fmt(overview?.cats?.[cat] || 0)}</span></button>
+    p.innerHTML = `<button class="kr all ${allOn ? "on" : ""}" data-all role="menuitemcheckbox" aria-checked="${allOn}"><span class="cb">${ICON.check}</span><span class="kn">All ${esc(CAT[cat].toLowerCase())}</span><span class="ks num">${fmt(overview?.cats?.[cat] || 0)}</span></button>
       <div class="ksep"></div>
-      ${ks.map(k => `<button class="kr ${focusCat === cat && focusKinds.has(k.id) ? "on" : ""}" data-k="${k.id}" data-tip-side="right" data-tip="${esc(k.exts.map(e => "." + e).join("  "))} · ${k.count.toLocaleString()} file${k.count === 1 ? "" : "s"}"><span class="cb">${ICON.check}</span><span class="kn">${esc(k.label)}</span><span class="ks num">${fmt(k.bytes)}</span></button>`).join("")}
+      ${ks.map(k => `<button class="kr ${focusCat === cat && focusKinds.has(k.id) ? "on" : ""}" data-k="${k.id}" role="menuitemcheckbox" aria-checked="${focusCat === cat && focusKinds.has(k.id)}" data-tip-side="right" data-tip="${esc(k.exts.map(e => "." + e).join("  "))} · ${k.count.toLocaleString()} file${k.count === 1 ? "" : "s"}"><span class="cb">${ICON.check}</span><span class="kn">${esc(k.label)}</span><span class="ks num">${fmt(k.bytes)}</span></button>`).join("")}
 `;
-  };
+  });
   draw(); p.hidden = false; p._cat = cat; p._draw = draw;
   markOpenChip();
   const r = btn.getBoundingClientRect(); p.style.left = Math.min(r.left, innerWidth - p.offsetWidth - 12) + "px"; p.style.top = r.bottom + 8 + "px";
+  p.setAttribute("aria-label", `Show on the map: ${CAT[cat]}`); kpopFocus(btn, keyboard);
   return true;
 }
-function closeKinds() { $("kpop").hidden = true; markOpenChip(); }
+function closeKinds() { const p = $("kpop"), back = !p.hidden && p.contains(document.activeElement) ? p._from : null; p.hidden = true; markOpenChip(); back?.focus(); }
+// (a click made with Return or Space carries no click count, which is how the keyboard is told from the mouse)
+function kpopKeep(redraw) { const p = $("kpop"), i = [...p.querySelectorAll(".kr")].indexOf(document.activeElement); redraw(); if (i >= 0) p.querySelectorAll(".kr")[i]?.focus(); }
+function kpopFocus(btn, keyboard) { const p = $("kpop"); p._from = btn; if (keyboard) (p.querySelector(".kr.on") || p.querySelector(".kr"))?.focus(); }
+$("kpop").addEventListener("keydown", e => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const rows = [...$("kpop").querySelectorAll(".kr")], i = rows.indexOf(document.activeElement);
+  e.preventDefault(); e.stopPropagation(); rows[(i + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length]?.focus();
+});
 // the colour whose menu is showing looks pressed, so it's clear what the menu belongs to
-function markOpenChip() { const c = $("kpop").hidden ? null : $("kpop")._cat; document.querySelectorAll("#chips .chip[data-cat]").forEach(b => b.classList.toggle("open", b.dataset.cat === c)); }
+function markOpenChip() { const c = $("kpop").hidden ? null : $("kpop")._cat; document.querySelectorAll("#chips .chip[data-cat]").forEach(b => b.classList.toggle("open", b.dataset.cat === c)); $("age-btn")?.classList.toggle("open", c === "age"); }
 function setFocus(cat, kinds) { changedOn = false; focusCat = cat; focusKinds = new Set(kinds || []); drawHeader(); markOpenChip(); open(current, null, "filter"); }
+function clearFilters() { focusAge = 0; closeKinds(); setFocus(null); }
+/* Untouched: only what hasn't been modified for 6 months, a year or two years. It's a filter like the kinds (the map
+   shows just the matches, nothing fades) and works with one: "Video" and "1 year" together are old videos. By itself
+   it's every file the map keeps, outside apps. The button sits on the path row, where the filter's summary shows. */
+const ageBtn = () => `<button class="agebtn${focusAge ? " on" : ""}" id="age-btn" aria-haspopup="menu" data-tip="${focusAge ? `Not modified for ${ageName()} or more` : "Show only what hasn't been touched for a while"}">${ICON.clock}${focusAge ? ageName() + "+" : "Untouched"}</button>`;
+function setAge(days) { changedOn = false; focusAge = days; open(current, null, "filter"); }
+function openAges(btn, keyboard) {
+  const p = $("kpop"), where = current, key = `ages|${where}|${focusCat}|${filterMask()}`;
+  let sizes = null;
+  const draw = () => kpopKeep(() => {
+    p.innerHTML = `<button class="kr all ${focusAge ? "" : "on"}" data-age="0" role="menuitemradio" aria-checked="${!focusAge}"><span class="cb">${ICON.check}</span><span class="kn">Any time</span></button>
+      <div class="ksep"></div>
+      ${AGES.map(([d, name]) => { const a = sizes?.find(x => x.days === d);
+        return `<button class="kr ${focusAge === d ? "on" : ""}" data-age="${d}" role="menuitemradio" aria-checked="${focusAge === d}"${a ? ` data-tip-side="right" data-tip="${a.count.toLocaleString()} file${a.count === 1 ? "" : "s"}"` : ""}><span class="cb">${ICON.check}</span><span class="kn">${name} or more</span><span class="ks num">${a ? fmt(a.bytes) : ""}</span></button>`; }).join("")}`;
+  });
+  draw(); p.hidden = false; p._cat = "age"; p._draw = draw; markOpenChip();
+  const r = btn.getBoundingClientRect(); p.style.left = Math.max(12, Math.min(r.left, innerWidth - p.offsetWidth - 12)) + "px"; p.style.top = r.bottom + 8 + "px";
+  p.style.left = Math.max(12, r.right - p.offsetWidth) + "px";   // under the button, lined up on its right edge
+  p.setAttribute("aria-label", "Untouched for"); kpopFocus(btn, keyboard);
+  // how much each would show, here and with the kind that's on
+  (recall(filterCache, key) || remember(filterCache, key, api(`/api/ages?path=${encodeURIComponent(where)}&cat=${focusCat || ""}&mask=${filterMask()}&days=${AGES.map(a => a[0]).join(",")}`).catch(() => { filterCache.delete(key); return null; }), CAP.filter))
+    .then(r => { if (r && !p.hidden && p._cat === "age" && current === where) { sizes = r.ages; draw(); } });
+}
 $("kpop").addEventListener("click", e => {
   const p = $("kpop"), cat = p._cat, b = e.target.closest("button"); if (!b) return;
-  if (b.classList.contains("kclear")) { setFocus(null); closeKinds(); return; }
+  if (b.dataset.age != null) { setAge(+b.dataset.age); closeKinds(); return; }
   if (b.hasAttribute("data-all")) setFocus(focusCat === cat && !focusKinds.size ? null : cat);
   else { const id = +b.dataset.k, ks = new Set(focusCat === cat ? focusKinds : []); ks.has(id) ? ks.delete(id) : ks.add(id); setFocus(cat, ks); }
   p._draw();
 });
-document.addEventListener("mousedown", e => { if (!$("kpop").hidden && !e.target.closest("#kpop, #chips")) closeKinds(); });
+document.addEventListener("mousedown", e => { if (!$("kpop").hidden && !e.target.closest("#kpop, #chips, #age-btn")) closeKinds(); });
 document.addEventListener("mousedown", e => { if (!$("insp").hidden && !e.target.closest("#insp, #map .b.inspected, .row.inspected")) closeInsp(); });
+// a line for VoiceOver, in a status area nothing shows: what just changed, once
+function say(text) { const el = $("say"); el.textContent = ""; setTimeout(() => { el.textContent = text; }, 60); }
 let toastTimer;
 function toast(html, ms = 6000) {
   const t = $("toast"); t.innerHTML = html; t.classList.remove("out"); t.hidden = false;
@@ -1326,7 +1395,8 @@ $("tray-clear").onclick = () => { picked.clear(); syncSelection(); };
 function binWords(w) {
   if (!w || w === BIN) return;
   BIN = w;
-  $("hint-trash-l").textContent = BIN.toLowerCase(); $("v-trash").dataset.tip = `Move to ${BIN} · ⌘⌫`;
+  $("hint-trash-l").textContent = BIN.toLowerCase(); $("v-trash").dataset.tip = `Move to ${BIN} · ⌘⌫`; $("v-trash").setAttribute("aria-label", `Move to ${BIN}`);
+  $("confirm").setAttribute("aria-label", `Move to the ${BIN}`);
   syncSelection();
 }
 // a number that runs to its new value; with reduced motion it's just there
@@ -1411,12 +1481,13 @@ function openConfirm(items) {
   const things = binThings(items), total = items.reduce((s, x) => s + x.size, 0), care = things.filter(t => t.care).length;
   Object.assign(CF, { state: "ask", items, things, gain: null });
   $("sc-undo").hidden = true; $("sc-led").classList.remove("on");
-  scDraw("scan", `<div class="sc-l">MOVE TO ${BIN.toUpperCase()}?</div><div class="sc-big num">${fmt(total)}</div>
+  scDraw("scan", `<div class="sc-l">Move to ${BIN}?</div><div class="sc-big num">${fmt(total)}</div>
     <div class="sc-list">${things.map((t, i) => `<div class="sc-row${t.care ? " care" : ""}" data-i="${i}" data-tip="${esc(tilde(t.paths[0]) + (t.paths.length > 1 ? ` and ${t.paths.length - 1} more` : ""))}"><span>${esc(t.name)}</span><b class="num">${fmt(t.size)}</b><button class="sc-x" aria-label="Leave ${esc(t.name)} out" data-tip="Leave out">×</button></div>`).join("")}</div>
-    <div class="sc-l dim">${care ? `<span class="warn">${care} ${care === 1 ? "IS" : "ARE"} APP DATA</span> · ` : ""}YOU CAN PUT ${things.length === 1 ? "IT" : "THEM"} BACK</div>`, fresh ? "" : "still");   // a line left out: the rest stays put
+    <div class="sc-l dim">${care ? `<span class="warn">${care} ${care === 1 ? "is" : "are"} app data</span> · ` : ""}You can put ${things.length === 1 ? "it" : "them"} back</div>`, fresh ? "" : "still");   // a line left out: the rest stays put
   $("sc-note").hidden = !NATIVE || (() => { try { return localStorage.getItem("rumi-trashed-before") === "1"; } catch { return false; } })();
   if (fresh) { show("confirm"); scOn(); }
   scKeys(["k-b", "Cancel", cfClose], ["k-a", `Move to ${BIN}`, trashConfirmed]);
+  say(`Move ${things.length} ${things.length === 1 ? "thing" : "things"}, ${fmt(total)}, to the ${BIN}? You can put ${things.length === 1 ? "it" : "them"} back.`);
 }
 $("sc-in").addEventListener("click", e => {
   const x = e.target.closest(".sc-x"); if (!x || CF.state !== "ask") return;
@@ -1445,7 +1516,7 @@ async function trashConfirmed() {
     if (!dupes?.groups) { const d = await api("/api/dupes").catch(() => null), all = wholeSet(eff, d?.groups); if (all) { hide("confirm"); return keepOneToast(all); } }
     CF.state = "moving";
     const box = $("sc-in"), rows = [...box.querySelectorAll(".sc-row")];
-    box.classList.add("busy"); box.querySelector(".sc-l").textContent = "MOVING…"; $("sc-keys").innerHTML = ""; $("sc-note").hidden = true;
+    box.classList.add("busy"); box.querySelector(".sc-l").textContent = "Moving…"; $("sc-keys").innerHTML = ""; $("sc-note").hidden = true;
     const ticks = (async () => { for (const [i, r] of rows.slice(0, 6).entries()) { r.classList.add("ok"); beep(620 + i * 70, .045); await wait(REDUCED.matches ? 0 : 110); } })();
     let res;
     try { [res] = await Promise.all([api("/api/trash", { paths: eff }), ticks, wait(550)]); }
@@ -1482,9 +1553,10 @@ async function binScreen(moved = 0, skipped = "") {
   Object.assign(CF, { state: "bin", bin, disk: { used: d.used, total: d.total }, gain: null });
   $("sc-note").hidden = true; $("sc-led").classList.remove("on");
   if (!fresh) await scOff();
-  scDraw(moved ? "happy" : "idle", `<div class="sc-l">${moved ? "MOVED TO" : "IN"} THE ${BIN.toUpperCase()}</div><div class="sc-big num" id="sc-big">${fmt(moved || bin)}</div>
-    ${scDisk(d.used, bin, d.total)}<div class="sc-l dim">STILL ON YOUR DISK · FREE <b class="num">${fmt(d.free)}</b></div>
-    ${skipped ? `<div class="sc-l warn small">${esc(skipped)}</div>` : ""}<div class="sc-meter"><em id="sc-em"></em></div><div class="sc-l blink" id="sc-hold">HOLD TO EMPTY</div>`);
+  scDraw(moved ? "happy" : "idle", `<div class="sc-l">${moved ? "Moved to" : "In"} the ${BIN}</div><div class="sc-big num" id="sc-big">${fmt(moved || bin)}</div>
+    ${scDisk(d.used, bin, d.total)}<div class="sc-l dim">Still on your disk · free <b class="num">${fmt(d.free)}</b></div>
+    ${skipped ? `<div class="sc-l warn small">${esc(skipped)}</div>` : ""}<div class="sc-meter"><em id="sc-em"></em></div><div class="sc-l blink" id="sc-hold">Hold to empty</div>`);
+  say(`${moved ? `Moved ${fmt(moved)} to the ${BIN}.` : `${fmt(bin)} in the ${BIN}.`} Still on your disk. ${skipped ? skipped + ". " : ""}Hold Empty ${BIN} to free it.`);
   if (fresh) show("confirm");
   scOn(); calmUntil = performance.now() + 1300;
   if (moved) { beep(660, .07); beep(880, .1, .08); const big = $("sc-big"); tween(700, t => { big.textContent = fmt(moved * t); }); }
@@ -1524,7 +1596,7 @@ function holdKey(btn, anims, done) {
 // 4 · freed: the picture flips, the Bin's blocks pop, the stars come out
 async function emptyBin() {
   const f0 = status.disk.free, bin = CF.bin, dk = CF.disk;
-  CF.state = "emptying"; clearTimeout(refreshT); $("sc-keys").innerHTML = ""; $("sc-undo").hidden = true; $("sc-hold").textContent = "EMPTYING…";
+  CF.state = "emptying"; clearTimeout(refreshT); $("sc-keys").innerHTML = ""; $("sc-undo").hidden = true; $("sc-hold").textContent = "Emptying…";
   const [r] = await Promise.all([api("/api/empty-trash", {}).catch(e => ({ ok: false, error: e.message || String(e) })), wait(300)]);
   lastTrashed = [];
   status = await api("/api/status").catch(() => status);
@@ -1533,12 +1605,13 @@ async function emptyBin() {
   await scOff();
   if (!r.ok) {
     CF.state = "bin";
-    scDraw("empty", `<div class="sc-l warn">COULDN'T EMPTY THE ${BIN.toUpperCase()}</div><div class="sc-l dim small">${esc(r.error)}</div>`);
-    scOn(); scKeys(["k-a wide", "Done", cfClose]); return;
+    scDraw("empty", `<div class="sc-l warn">Couldn't empty the ${BIN}</div><div class="sc-l dim small">${esc(r.error)}</div>`);
+    scOn(); scKeys(["k-a wide", "Done", cfClose]); say(`Couldn't empty the ${BIN}. ${r.error}`); return;
   }
   const f1 = status.practice ? f0 + bin : Math.max(f0, status.disk.free);
   Object.assign(CF, { state: "freed", gain: [f0, f1] });
-  scDraw("happy", `<div class="sc-l ok">FREED</div><div class="sc-big num ok" id="sc-big"></div>${scDisk(dk.used, bin, dk.total)}<div class="sc-l dim">FREE <b class="num" id="sc-free"></b></div>`, "done");
+  scDraw("happy", `<div class="sc-l ok">Freed</div><div class="sc-big num ok" id="sc-big"></div>${scDisk(dk.used, bin, dk.total)}<div class="sc-l dim">Free <b class="num" id="sc-free"></b></div>`, "done");
+  say(`Freed ${fmt(bin)}. ${fmt(f1)} free.`);
   scOn(); $("sc-led").classList.add("on"); calmUntil = performance.now() + 1500;
   [523, 659, 784, 1047].forEach((f, i) => beep(f, .11, i * .09));
   if (!REDUCED.matches) [...$("sc-stars").children].forEach((s, i) => s.animate([{ transform: "scale(0) rotate(-40deg)", opacity: 0 }, { transform: "scale(1.15) rotate(10deg)", opacity: 1, offset: .45 }, { transform: "scale(1) rotate(0)", opacity: 1, offset: .7 }, { transform: "scale(0) rotate(30deg)", opacity: 0 }],
@@ -1595,12 +1668,12 @@ function drawHidden() {
     rows.push({ id: "private", title: "Private to macOS", size: Math.max(0, total - measured),
       note: `Spotlight's index and folders apps can't read${status.denied ? `, including ${status.denied.toLocaleString()} in your home` : ""}` });
     const all = Math.max(total, measured);
-    $("hd-bar").innerHTML = rows.filter(r => r.size > 0).map(r => `<i class="${r.id === "private" ? "priv" : ""}" style="flex:${r.size / all};${r.id === "private" ? "" : `background:${HCOL[r.id] || "var(--c-other)"}`}" title="${esc(r.title)}"></i>`).join("");
+    $("hd-bar").innerHTML = rows.filter(r => r.size > 0).map(r => `<i class="${r.id === "private" ? "priv" : ""}" style="flex:${r.size / all};${r.id === "private" ? "" : `background:${HCOL[r.id] || "var(--c-other)"}`}" data-tip="${esc(r.title)}"></i>`).join("");
     const snaps = hiddenData.snapshots || 0;
     const snapNote = snaps ? `Newest from ${snapDate(hiddenData.newestSnapshot)}. macOS removes them when it needs room; their size isn't shown.` : "";
     $("hd-rows").innerHTML = rows.map(r => `<div class="hrow"><i class="${r.id === "private" ? "priv" : ""}" style="${r.id === "private" ? "" : `background:${HCOL[r.id] || "var(--c-other)"}`}"></i>
         <div class="ht" data-tip="${esc(r.note)}"><b>${esc(r.title)}</b>${r.warn ? `<div class="warnline">${esc(r.warn)}</div>` : ""}</div>
-        <span class="num">${fmt(r.size)}</span>${r.path ? `<button class="btn small ghost" data-reveal="${esc(r.path)}" title="Show in Finder">${ICON.finder}</button>` : "<span></span>"}</div>`).join("")
+        <span class="num">${fmt(r.size)}</span>${r.path ? `<button class="btn small ghost" data-reveal="${esc(r.path)}" data-tip="Show in Finder" aria-label="Show ${esc(r.title)} in Finder">${ICON.finder}</button>` : "<span></span>"}</div>`).join("")
       + `<div class="hrow"><i class="ring"></i><div class="ht"${snapNote ? ` data-tip="${esc(snapNote)}"` : ""}><b>Time Machine snapshots</b></div><span class="num dim">${snaps || "None"}</span><span></span></div>`;
   }
   $("hd-free").hidden = !(d.purgeable > 3e8);
@@ -1613,6 +1686,60 @@ function snapDate(name) {
 $("hd-x").onclick = () => hide("hidden");
 $("hidden").addEventListener("mousedown", e => { if (e.target.id === "hidden") hide("hidden"); });
 $("hd-rows").addEventListener("click", e => { const r = e.target.closest("[data-reveal]"); if (r) reveal(r.dataset.reveal); });
+
+/* ---------- the map from the keyboard ----------
+   Arrow keys move between cartridges by where they sit. Return opens (the same as a click), + adds to Clean up, Space
+   previews and ⌘⌫ moves to the Bin. The cartridge you're on has the real keyboard focus: it shows the ink outline,
+   its hover card comes up beside it, and VoiceOver reads its label. Tab stops on the map once, at that cartridge. */
+let kbPath = null, kbFrom = "", kbOn = false;   // where the keyboard was, the folder just left, and whether it's in use
+const mapCells = () => [...document.querySelectorAll("#map .layer:not(.leaving) .b:not(.container)")];
+function kbFocus(el) {
+  if (!el) return;
+  kbOn = true; el.focus({ preventScroll: true });
+}
+// after the map is redrawn: one cartridge is the Tab stop (the one the keyboard was on, else the folder just left, else
+// the first), and if the keyboard is in use the focus goes back to it
+function kbLand() {
+  const cells = mapCells(); if (!cells.length) return;
+  const el = cells.find(c => kbPath && c.dataset.path === kbPath)
+    || cells.filter(c => c.dataset.path && (kbFrom === c.dataset.path || kbFrom.startsWith(c.dataset.path + "/"))).sort((a, b) => b.dataset.path.length - a.dataset.path.length)[0]
+    || cells.slice().sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
+  el.tabIndex = 0;
+  const at = document.activeElement;
+  if (kbOn && (!at || at === document.body || at.closest("#map")) && !dialogUp() && $("find").hidden) el.focus({ preventScroll: true });
+}
+function kbMove(key) {
+  const cells = mapCells(), cur = document.activeElement?.closest?.("#map .b");
+  if (!cells.length) return;
+  if (!cur || !cells.includes(cur)) return kbFocus(cells.find(c => hoverP && c.dataset.path === hoverP) || cells.find(c => c.tabIndex === 0) || cells[0]);
+  const a = cur.getBoundingClientRect(), [dx, dy] = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[key];
+  let best = null, least = Infinity;
+  for (const c of cells) {
+    if (c === cur) continue;
+    const b = c.getBoundingClientRect();
+    // how far it is the way you pressed (edge to edge), how far off to the side (0 if they line up), and how far apart their middles are
+    const along = dx ? (dx > 0 ? b.left - a.right : a.left - b.right) : dy > 0 ? b.top - a.bottom : a.top - b.bottom;
+    if (along < -2) continue;
+    const off = dx ? Math.max(0, b.top - a.bottom, a.top - b.bottom) : Math.max(0, b.left - a.right, a.left - b.right);
+    const mid = dx ? Math.abs(b.top + b.height / 2 - a.top - a.height / 2) : Math.abs(b.left + b.width / 2 - a.left - a.width / 2);
+    const score = along + off * 3 + (off ? 60 : 0) + mid * .05;
+    if (score < least) { least = score; best = c; }
+  }
+  if (best) { closeInsp(); kbFocus(best); }
+}
+$("map").addEventListener("focusin", e => {
+  const el = e.target.closest(".b:not(.container)"); if (!el) return;
+  document.querySelectorAll("#map .b[tabindex='0']").forEach(b => { if (b !== el) b.tabIndex = -1; });
+  el.tabIndex = 0; kbPath = el.dataset.path || null;
+  if (!el.matches(":focus-visible")) return;   // a click also focuses; only the keyboard gets the card and counts as "hovering"
+  kbOn = true; hoverP = el.dataset.path || null;
+  if (NATIVE) api("/native/hover", { path: hoverP }).catch(() => {});
+  const k = hoverP && meta.get(hoverP), r = el.getBoundingClientRect();
+  if (k) hoverTip({ clientX: r.right - 22, clientY: r.top - 6 }, k); else $("tip").hidden = true;
+});
+$("map").addEventListener("focusout", () => { $("tip").hidden = true; });
+// the pointer takes over again: the outline goes, and Space and ⌘⌫ follow the pointer as before
+$("map").addEventListener("mousemove", () => { if (!kbOn) return; kbOn = false; document.activeElement?.closest?.("#map .b")?.blur(); });
 
 /* ---------- like Finder: Space previews, right-click menu, ⌘⌫, drag cartridges out ---------- */
 let hoverP = null, qlOpen = false, dragClick = false;
@@ -1731,6 +1858,11 @@ addEventListener("keydown", e => {
     return;
   }
   if (e.key === "Escape" && qlOpen) { ql("close"); return; }
+  // the map from the keyboard (unless the focus is somewhere else on the page, like the lists)
+  const at = document.activeElement, cell = at?.closest?.("#map .b");
+  if (/^Arrow/.test(e.key) && !e.metaKey && !e.altKey && !e.ctrlKey && (!at || at === document.body || at.closest("#map")) && $("kpop").hidden) { e.preventDefault(); kbMove(e.key); return; }
+  if (cell && e.key === "Enter") { e.preventDefault(); kbOn = true; cell.click(); return; }
+  if (cell && (e.key === "+" || e.key === "=")) { e.preventDefault(); cell.querySelector(":scope > .pick")?.click(); return; }
   const target = hoverP || inspEl?.dataset.path;
   if (e.key === " " && !e.metaKey && NATIVE && (target || qlOpen)) { e.preventDefault(); ql(target ? "toggle" : "close"); return; }
   if (e.metaKey && e.key === "Backspace") { e.preventDefault(); if (target) trashOne(target); return; }

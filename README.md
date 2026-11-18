@@ -12,6 +12,8 @@ A Mac app for managing disk space, searching for files, and giving you better co
 - Clear caches, old downloads and duplicates. Everything goes to the Trash, so you can undo it.
 - Search for any file from the menu bar, or press ⌃⌥Space in any app.
 - Open photos, videos and code without leaving the app.
+- Show only what you haven't touched in months.
+- Use the whole map from the keyboard, or with VoiceOver.
 
 It runs entirely on your Mac. No account, and nothing is sent anywhere.
 

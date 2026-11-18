@@ -13,8 +13,8 @@
      ↵ opens the thing itself, ⌘↵ shows it in Finder, ⌥↵ shows it on Rumi's map. -->
 <body class="quick">
 <div class="fbox">
-  <div class="fin"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><input id="f-q" placeholder="Search files and folders" spellcheck="false" autocomplete="off"><span id="f-n" class="num"></span></div>
-  <div class="flist" id="f-list"></div>
+  <div class="fin"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><input id="f-q" placeholder="Search files and folders" aria-label="Search files and folders" role="combobox" aria-expanded="true" aria-controls="f-list" spellcheck="false" autocomplete="off"><span id="f-n" class="num"></span></div>
+  <div class="flist" id="f-list" role="listbox" aria-label="Results"></div>
   <div class="ffoot"><span><kbd>↵</kbd> open</span><span><kbd>⌘↵</kbd> show in Finder</span><span><kbd>⌥↵</kbd> show in Rumi</span><span><kbd>esc</kbd> close</span></div>
 </div>
 <div class="tip" id="tip" hidden></div>

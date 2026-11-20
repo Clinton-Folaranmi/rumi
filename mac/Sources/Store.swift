@@ -243,7 +243,7 @@ final class Store {
 
     func startScan(quiet: Bool = false) {
         lock.lock()
-        if scanning { lock.unlock(); return }
+        if scanning || access == "misplaced" { lock.unlock(); return }
         scanning = true
         generation += 1
         let gen = generation

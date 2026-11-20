@@ -25,6 +25,13 @@ enum Access {
         }
     }
 
+    /// Opened straight from the downloaded disk image, or from the read-only copy macOS runs a just-downloaded app from,
+    /// instead of from Applications. Full Disk Access and Start at Login would point at a place that goes away, so Rumi
+    /// asks to be moved and does nothing else.
+    static func misplaced(_ path: String = Bundle.main.bundlePath) -> Bool {
+        (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.volumeIsReadOnlyKey]))?.volumeIsReadOnly == true
+    }
+
     static func skip() {
         UserDefaults.standard.set(true, forKey: "skippedFullDiskAccess")
         Store.shared.access = "skipped"
@@ -105,7 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         // search from anywhere: the menu-bar cartridge and its shortcut (not in test runs, which would add a second cartridge)
         QuickSearch.shared.makeConfig = { [unowned self] in self.makeConfig() }
         QuickSearch.shared.showMain = { [unowned self] in self.showMainWindow() }
-        if !testRun { QuickSearch.shared.install(); QuickSearch.shared.registerShortcut() }
+        let misplaced = !testRun && Access.misplaced()
+        if !testRun && !misplaced { QuickSearch.shared.install(); QuickSearch.shared.registerShortcut() }
 
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot") {
             // test mode: render off-screen, save a PNG of the window, report a few checks, quit
@@ -120,7 +128,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             snapshot(to: out, tries: 0)
             return
         }
-        if atLogin {
+        if misplaced {
+            Store.shared.access = "misplaced"   // the page shows one card: move me to Applications
+            web?.load(URLRequest(url: URL(string: "rumi://app/index.html")!))
+        } else if atLogin {
             // nothing is on screen: the saved map stays on disk, and the quiet rescan waits three minutes for login to settle
             Store.shared.unloaded = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
             Access.refresh(scan: false)
@@ -361,6 +372,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         NSApp.mainMenu = main
         NSApp.windowsMenu = win
     }
+}
+
+// `Rumi --check-place`: is this copy somewhere it can stay (Applications, a build folder) or still inside the download?
+if CommandLine.arguments.contains("--check-place") {
+    print("this copy:", Access.misplaced() ? "still in the download (read-only volume)" : "fine where it is")
+    exit(0)
 }
 
 // `Rumi --check-trash`: print what Move to Trash would say for some real paths (nothing is moved), then trash a file it

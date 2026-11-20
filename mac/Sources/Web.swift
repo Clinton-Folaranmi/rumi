@@ -179,6 +179,8 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             Access.openSettings(); done(["ok": true])
         case "/native/skip-access":
             Access.skip(); done(["ok": true])
+        case "/native/quit":   // the "Move Rumi to Applications first" card's only button
+            done(["ok": true]); NSApp.terminate(nil)
         case "/native/hover":
             (message.webView as? RumiWebView)?.hoverPath = body["path"] as? String
             done(["ok": true])

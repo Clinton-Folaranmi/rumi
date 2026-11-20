@@ -19,9 +19,19 @@ It runs entirely on your Mac. No account, and nothing is sent anywhere.
 
 ## Install
 
-There's no download yet, so you'll have to build it yourself.
+Download [Rumi.dmg](../../releases/latest/download/Rumi.dmg), open it, and drag Rumi to Applications.
 
-You need an Apple Silicon Mac on macOS 14 or later, and Apple's command line tools (`xcode-select --install`). You don't need Xcode.
+You need an Apple Silicon Mac on macOS 14 or later.
+
+The first time you open Rumi, macOS will block it, because it isn't signed with a paid Apple developer account. Click Done, then go to System Settings › Privacy & Security, scroll down and click Open Anyway. You only do this once.
+
+Then it asks for Full Disk Access so it can see Mail, Photos and other protected folders.
+
+Closing the window keeps Rumi in the menu bar. ⌘Q quits it. Right-click the menu bar icon to start it at login.
+
+### Or build it yourself
+
+You need Apple's command line tools (`xcode-select --install`). You don't need Xcode.
 
 Download or clone this repo, then run this in its folder:
 
@@ -29,19 +39,17 @@ Download or clone this repo, then run this in its folder:
 scripts/build.sh --install
 ```
 
-That builds Rumi, copies it to Applications and opens it. The first time, it asks for Full Disk Access so it can see Mail, Photos and other protected folders.
-
-Closing the window keeps Rumi in the menu bar. ⌘Q quits it. Right-click the menu bar icon to start it at login.
+That builds Rumi, copies it to Applications and opens it.
 
 ### If you rebuild often
 
-macOS forgets Full Disk Access each time the app is rebuilt, unless it's signed the same way every time. Set `RUMI_SIGN_ID` to a code-signing identity from your keychain (a self-signed one is fine) and the access sticks.
+macOS forgets Full Disk Access each time the app is rebuilt, unless it's signed the same way every time. Set `RUMI_SIGN_ID` to a code-signing identity from your keychain (a self-signed one is fine, and `scripts/signing-setup.sh` makes one) and the access sticks.
 
 ## The code
 
 - `mac/Sources` is the Swift app: the disk scanner, search, duplicates, and the Trash with undo.
 - `web` is the interface. The app shows it in a web view.
-- `scripts` is the build. It's plain `swiftc`, with no Xcode project.
+- `scripts` is the build, and `scripts/release.sh` makes the download. It's plain `swiftc`, with no Xcode project.
 
 ## Status
 

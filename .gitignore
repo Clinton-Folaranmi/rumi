@@ -4,3 +4,4 @@ build/
 *.zip
 __pycache__/
 .signing-identity
+.release-identity

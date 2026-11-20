@@ -1824,6 +1824,17 @@ $("access-open").onclick = () => {
 };
 $("access-skip").onclick = () => api("/native/skip-access", {}).then(() => hide("access")).catch(() => hide("access"));
 function showAccessCard() { Rumi.mount($("access-rumi"), $("access").classList.contains("waiting") ? "scan" : "sleep", { size: 92 }); show("access"); }
+// opened straight from the download instead of from Applications: say so, and do nothing else
+function showPlaceCard() {
+  if ($("place-quit")) return;
+  Rumi.mount($("access-rumi"), "idle", { size: 92 });
+  $("access-h").textContent = "Move Rumi to Applications first";
+  $("access-p").textContent = "This copy is still inside the download. Drag Rumi onto Applications in that window, then open it from there.";
+  $("access").querySelector("ol").remove();
+  $("access").querySelector(".acts").innerHTML = `<button class="btn primary" id="place-quit">Quit</button>`;
+  $("place-quit").onclick = () => api("/native/quit", {});
+  show("access"); $("place-quit").focus();
+}
 function showAccess() {   // Rumi menu › Full Disk Access…, and the "kept private" note
   showAccessCard();
   if (status && status.access !== "needed") { $("access-skip").textContent = "Not now"; $("access-skip").onclick = () => hide("access"); }
@@ -1894,6 +1905,7 @@ async function poll() {
   HOME = status.home; binWords(status.bin);
   if (status.practice && !$("practice")) document.body.insertAdjacentHTML("beforeend", `<div id="practice">Practice copy · nothing is really moved</div>`);
   if (status.loading) { setTimeout(poll, 60); return; }   // last launch's map is being read; it takes a moment
+  if (status.access === "misplaced") { showPlaceCard(); hide("scanning"); return; }
   if (status.access === "needed") { showAccessCard(); hide("scanning"); setTimeout(poll, 700); return; }
   hide("access");
   if (!status.ready) {

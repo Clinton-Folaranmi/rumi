@@ -5,7 +5,7 @@
 set -euo pipefail
 ROOT=${0:A:h:h}
 OUT=$ROOT/build
-APP=$OUT/Rumi.app
+APP=${RUMI_APP_OUT:-$OUT/Rumi.app}   # scripts/release.sh builds its copy somewhere else
 # A stable signature keeps Full Disk Access across rebuilds. Name a code-signing identity from your keychain in RUMI_SIGN_ID,
 # or in a file called .signing-identity beside this repo's README (it isn't committed). Without one the app is signed ad hoc:
 # it runs, but macOS asks for Full Disk Access again after each build.

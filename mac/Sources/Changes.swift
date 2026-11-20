@@ -29,6 +29,30 @@ enum Changes {
         return (b.scannedAt, History.used(at: b.scannedAt))
     }
 
+    /// The same hand-over when a saved map is brought up to date from the file-system log instead of by a scan: if it's
+    /// 12 hours old or more, it becomes the comparison scan, and every mark starts again from "nothing changed". Call
+    /// right after the map is read from its file, before any change is folded in.
+    static func newDay(_ S: Store, mapAt: Double) {
+        guard Date().timeIntervalSince1970 - mapAt >= KEEP else { return }
+        let ok: Bool = Snapshot.writeQ.sync {
+            let fm = FileManager.default
+            guard Snapshot.scannedAt(Snapshot.treeURL).map({ abs($0 - mapAt) < 1 }) == true else { return false }
+            try? fm.removeItem(at: Snapshot.baselineURL)
+            return (try? fm.copyItem(at: Snapshot.treeURL, to: Snapshot.baselineURL)) != nil
+        }
+        guard ok else { return }
+        let used = History.used(near: mapAt)
+        S.lock.lock(); defer { S.lock.unlock() }
+        guard let top = S.root, abs(S.finished - mapAt) < 1 else { return }
+        var stack = [top]
+        while let d = stack.popLast() {
+            d.was = d.size; d.wasSmall = d.small; d.gone = []; d.churn = 0
+            for i in d.files.indices { d.files[i].was = d.files[i].alloc }
+            stack.append(contentsOf: d.dirs)
+        }
+        S.baselineAt = mapAt; S.baseUsed = used; S.churnStale = false
+    }
+
     /// Mark every folder and file in `top` with what it was in `base`, matched by name level by level.
     static func diff(_ top: Dir, _ base: Dir) {
         var stack: [(Dir, Dir?)] = [(top, base)]
@@ -196,16 +220,7 @@ enum History {
         lock.lock(); defer { lock.unlock() }
         var scans = load()
         scans.append(entry)
-        // the last two days keep every scan; before that, the last scan of each day
-        let cal = Calendar.current, recent = t - 48 * 3600
-        var seen = Set<DateComponents>(), kept: [[String: Any]] = []
-        for s in scans.reversed() {
-            let st = s["t"] as? Double ?? 0
-            if st >= recent { kept.append(s); continue }
-            if seen.insert(cal.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: st))).inserted { kept.append(s) }
-        }
-        scans = Array(kept.reversed().suffix(1500))
-        try? jsonData(["version": 1, "scans": scans]).write(to: Snapshot.historyURL, options: .atomic)
+        write(thin(scans, now: t))
     }
 
     /// The disk's used space when the scan made at `t` finished (-1: not on record).
@@ -213,5 +228,78 @@ enum History {
         lock.lock(); defer { lock.unlock() }
         for s in load() where abs((s["t"] as? Double ?? 0) - t) < 2 { return (s["used"] as? NSNumber)?.int64Value ?? -1 }
         return -1
+    }
+
+    /// The disk's used space on the record closest to `t`, if one is within three hours (-1: none).
+    static func used(near t: Double) -> Int64 {
+        lock.lock(); defer { lock.unlock() }
+        let best = load().min { abs(($0["t"] as? Double ?? 0) - t) < abs(($1["t"] as? Double ?? 0) - t) }
+        guard let b = best, abs((b["t"] as? Double ?? 0) - t) < 3 * 3600 else { return -1 }
+        return (b["used"] as? NSNumber)?.int64Value ?? -1
+    }
+
+    /// A line without a scan: just when, and how full the disk is. Rumi adds one an hour while it runs (the forecast
+    /// needs the days Rumi wasn't opened too), and one whenever a saved map is brought up to date.
+    static func sample(force: Bool = false) {
+        let disk = diskInfo(), t = Date().timeIntervalSince1970
+        lock.lock(); defer { lock.unlock() }
+        var scans = load()
+        if !force, let last = scans.last?["t"] as? Double, t - last < 3300 { return }
+        scans.append(["t": t, "used": disk["used"] ?? 0, "free": disk["free"] ?? 0])
+        write(thin(scans, now: t))
+    }
+
+    /// The last two days keep every line; before that, the last line of each day.
+    private static func thin(_ scans: [[String: Any]], now t: Double) -> [[String: Any]] {
+        let cal = Calendar.current, recent = t - 48 * 3600
+        var seen = Set<DateComponents>(), kept: [[String: Any]] = []
+        for s in scans.reversed() {
+            let st = s["t"] as? Double ?? 0
+            if st >= recent { kept.append(s); continue }
+            if seen.insert(cal.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: st))).inserted { kept.append(s) }
+        }
+        return Array(kept.reversed().suffix(1500))
+    }
+
+    private static func write(_ scans: [[String: Any]]) {
+        try? jsonData(["version": 1, "scans": scans]).write(to: Snapshot.historyURL, options: .atomic)
+    }
+
+    private static var told: (at: Double, what: [String: Any]?) = (0, nil)
+    /// The forecast for the page's header, worked out at most every ten minutes.
+    static func forecastNow() -> [String: Any]? {
+        let now = Date().timeIntervalSince1970
+        lock.lock(); let t = told; lock.unlock()
+        if now - t.at < 600 { return t.what }
+        let f = forecast(now: now)
+        lock.lock(); told = (now, f); lock.unlock()
+        return f
+    }
+
+    /// "Full in about three weeks": only when free space has fallen steadily and would run out within 60 days.
+    /// One point per day over the last 30 days, a straight line through them. Nil when there's too little to go on,
+    /// the disk isn't filling, the days disagree too much with the line, or the date is further off.
+    static func forecast(now: Double = Date().timeIntervalSince1970, free: Int64? = nil, lines: [[String: Any]]? = nil) -> [String: Any]? {
+        var all = lines ?? []
+        if lines == nil { lock.lock(); all = load(); lock.unlock() }
+        let cal = Calendar.current
+        var days: [DateComponents: (t: Double, free: Double)] = [:]
+        for s in all {
+            guard let t = s["t"] as? Double, t >= now - 30 * 86400, t <= now, let f = (s["free"] as? NSNumber)?.doubleValue else { continue }
+            let k = cal.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: t))
+            if days[k] == nil || days[k]!.t < t { days[k] = (t, f) }
+        }
+        let pts = days.values.sorted { $0.t < $1.t }
+        guard pts.count >= 6, let a = pts.first, let b = pts.last, b.t - a.t >= 6 * 86400 else { return nil }
+        let n = Double(pts.count), mx = pts.reduce(0) { $0 + $1.t } / n, my = pts.reduce(0) { $0 + $1.free } / n
+        var sxx = 0.0, sxy = 0.0, syy = 0.0
+        for p in pts { sxx += (p.t - mx) * (p.t - mx); sxy += (p.t - mx) * (p.free - my); syy += (p.free - my) * (p.free - my) }
+        guard sxx > 0, syy > 0 else { return nil }
+        let slope = sxy / sxx, fit = sxy * sxy / (sxx * syy)          // bytes a second; how well the days follow the line (0–1)
+        let freeNow = Double(free ?? (diskInfo()["free"] as? Int64 ?? 0))
+        guard slope < 0, fit >= 0.6, freeNow > 0 else { return nil }
+        let left = freeNow / -slope / 86400
+        guard left >= 1, left <= 60 else { return nil }
+        return ["days": left.rounded(), "at": now + left * 86400, "perDay": (-slope * 86400).rounded(), "from": a.t, "points": pts.count]
     }
 }

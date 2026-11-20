@@ -71,17 +71,24 @@ enum Snapshot {
             let item = DispatchWorkItem {
                 let S = Store.shared
                 S.lock.lock()
-                guard let top = S.root, !S.scanning else { S.lock.unlock(); return }   // a running scan will save its own
-                let data = encode(top: top, roots: S.roots, scannedAt: S.finished, files: top.count, big: S.bigFiles, cats: S.catTotals, denied: S.denied, kinds: S.kindTotals,
-                                  baselineAt: S.baselineAt, baseUsed: S.baseUsed)
+                guard S.root != nil, !S.scanning else { S.lock.unlock(); return }   // a running scan will save its own
                 let dupes = S.dupes
+                saveNow(S)
                 S.lock.unlock()
-                write(data)
                 saveDupes(dupes)
             }
             pendingSave = item
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.5, execute: item)
         }
+    }
+
+    /// Write the map as it is now, and where it stands in the file-system log. Call with the store's lock held.
+    static func saveNow(_ S: Store) {
+        guard let top = S.root else { return }
+        write(encode(top: top, roots: S.roots, scannedAt: S.finished, files: top.count, big: S.bigFiles, cats: S.catTotals, denied: S.denied, kinds: S.kindTotals,
+                     baselineAt: S.baselineAt, baseUsed: S.baseUsed))
+        if S.liveEvent > 0 { Live.save(event: S.liveEvent, at: S.finished, full: S.liveFull) }
+        S.liveDirty = false
     }
 
     static func saveDupes(_ d: DupState) {

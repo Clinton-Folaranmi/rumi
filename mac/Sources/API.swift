@@ -30,19 +30,24 @@ extension Store {
     func statusJSON() -> [String: Any] {
         progressLock.lock(); let seen = filesSeen, cur = current; progressLock.unlock()
         let disk = diskInfo()   // a volume query: keep it outside the lock the main thread also takes
+        // practice copies show a made-up forecast so the line can be looked at; the real one needs steady weeks
+        let forecast: [String: Any]? = REVIEW ? ["days": 19, "perDay": 1_400_000_000, "from": Date().timeIntervalSince1970 - 16 * 86400] : History.forecastNow()
         lock.lock(); defer { lock.unlock() }
         let end = finished > started ? finished : Date().timeIntervalSince1970
-        return [
+        var out: [String: Any] = [
             "scanning": scanning, "files": seen, "current": cur.replacingOccurrences(of: HOME, with: "~"),
             "elapsed": started > 0 ? ((end - started) * 10).rounded() / 10 : 0,
             // a saved map counts as ready: the page shows it while a rescan runs quietly behind it
-            "ready": root != nil, "loading": loading, "refreshing": scanning && root != nil, "saved": fromSaved,
+            "ready": root != nil, "loading": loading, "refreshing": (scanning || Live.catchingUp) && root != nil, "saved": fromSaved,
+            "live": Live.current && !scanning,   // changes on disk reach the map by themselves
             "scannedAt": root != nil ? finished : 0, "generation": generation, "since": root != nil ? baselineAt : 0,
             "disk": disk, "roots": roots, "home": HOME, "bin": BIN, "binSize": (index[HOME + "/.Trash"]?.size ?? 0) + trashedSince, "practice": REVIEW,
             "uiSounds": UserDefaults.standard.object(forKey: "com.apple.sound.uiaudio.enabled") as? Bool ?? true,   // the Mac's "play user interface sound effects"
             "denied": denied.count, "access": access,
             "dupes": ["status": dupes.status, "progress": dupes.progress, "total": dupes.total, "rev": dupes.rev],
         ]
+        if let f = forecast { out["forecast"] = f }
+        return out
     }
 
     func toJSON(_ n: Dir, _ depth: Int) -> [String: Any] {
@@ -522,7 +527,12 @@ func findDuplicates(gen: Int) {
                 var files = same.map { ["path": $0.path, "size": $0.alloc, "mtime": $0.mtime] as [String: Any] }
                 if h != "sampled" {
                     // copies that are clones of each other share their blocks: mark them, and they add no waste
-                    let fam = same.map { cloneFamily($0.path) }
+                    // (two names of one hard-linked file do too)
+                    let fam = same.map { b -> String? in
+                        var st = stat()
+                        if lstat(b.path, &st) == 0, st.st_nlink > 1 { return "link-\(st.st_dev)-\(st.st_ino)" }
+                        return cloneFamily(b.path)
+                    }
                     var n: [String: Int] = [:]
                     for f in fam { if let f = f { n[f, default: 0] += 1 } }
                     for (i, f) in fam.enumerated() { if let f = f, n[f]! > 1 { files[i]["clone"] = f } }
@@ -822,7 +832,7 @@ func trashJSON(_ paths: [String]) -> [String: Any] {
         } else if let p = path, let key = apps[p], let app = openApp(for: key, in: running) {
             why = "\(app) is open. Quit it first"   // its cache is in use: removing it under the app can break what it's doing
         } else if let p = path {
-            var st = stat(); let size: Int64? = lstat(p, &st) == 0 ? Int64(st.st_blocks) * 512 : nil   // small files aren't in the tree: say how much left
+            var st = stat(); let size: Int64? = lstat(p, &st) == 0 ? sharedAlloc(st) : nil   // small files aren't in the tree: say how much left
             go.append((i, p, size)); moving.append(p)
         }
         results[i] = ["path": path ?? asked[i], "ok": false, "error": why]

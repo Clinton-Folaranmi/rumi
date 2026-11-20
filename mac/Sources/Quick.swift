@@ -141,9 +141,7 @@ final class QuickSearch: NSObject, NSWindowDelegate, WKNavigationDelegate {
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(web)
         web.evaluateJavaScript("window.focusQuick && focusQuick()")
-        // a map that's hours old gets a quiet rescan, so sizes and big files in the results are current
-        let S = Store.shared
-        if !S.scanning, S.access != "needed", S.finished > 0, Date().timeIntervalSince1970 - S.finished > 6 * 3600 { S.startScan(quiet: true) }
+        Live.bringCurrent()   // sizes and big files in the results follow what's on disk now
     }
 
     private func build() {

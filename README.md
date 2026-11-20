@@ -14,6 +14,8 @@ A Mac app for managing disk space, searching for files, and giving you better co
 - Open photos, videos and code without leaving the app.
 - Show only what you haven't touched in months.
 - Use the whole map from the keyboard, or with VoiceOver.
+- It keeps itself up to date. Opening it doesn't start a scan.
+- If your disk is filling up steadily, it says roughly when it will be full.
 
 It runs entirely on your Mac. No account, and nothing is sent anywhere.
 

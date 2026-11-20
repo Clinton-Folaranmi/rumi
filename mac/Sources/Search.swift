@@ -98,7 +98,7 @@ enum Search {
                 let d = idx[p]
                 out.append((s, d?.size ?? 0, row(p, name, d?.size ?? 0, dir: true, cat: d?.cat ?? CAT_OTHER, mtime: d?.mtime ?? mt, pkg: d?.pkg ?? PKG_SUFFIXES.contains { name.hasSuffix($0) }, score: s)))
             } else {
-                let a = Int64(st.st_blocks) * 512
+                let a = sharedAlloc(st)
                 out.append((s, a, row(p, name, a, dir: false, cat: fileCat(name, nil), mtime: mt, pkg: false, score: s)))
             }
         }

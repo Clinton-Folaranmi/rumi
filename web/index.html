@@ -21,8 +21,8 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
       Rumi
     </div>
     <div class="spacer"></div>
-    <button class="btn" id="find-btn" data-tip="⌘F"></button>
-    <button class="btn" id="rescan" data-tip="⌘R"><svg class="i" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg><span id="rescan-l">Rescan</span></button>
+    <button class="btn" id="find-btn" data-tip="⌘F to search"></button>
+    <button class="btn" id="rescan" data-tip="⌘R to rescan"><svg class="i" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg><span id="rescan-l">Rescan</span></button>
   </div>
   <div class="dash">
     <div class="hero"><div class="big num" id="hero-used">—</div><div class="sub" id="hero-sub">Reading your disk…</div><button class="chip" id="since" hidden></button></div>
@@ -82,7 +82,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
       <div class="sc-teeth"></div>
       <div class="sc-stars" id="sc-stars"><i></i><i></i><i></i><i></i><i></i></div>
     </div>
-    <button class="sc-undo" id="sc-undo" hidden data-tip="Put everything back where it was">Undo</button>
+    <button class="sc-undo" id="sc-undo" hidden data-tip="Put everything back">Undo</button>
     <p class="sc-note" id="sc-note" hidden>macOS will ask to let Rumi use Finder. Say OK so Put Back works.</p>
   </div>
 </div>
@@ -301,8 +301,12 @@ function drawHeader() {
   const [n, u] = fmt(d.used, true);
   $("hero-used").innerHTML = `${chars(n)}<small>${u}</small>`;
   const low = d.free / d.total < 0.12;
-  const tip = d.purgeable > 3e8 ? ` data-tip="${fmt(d.freeNow)} free now · ${fmt(d.purgeable)} more when macOS clears caches"` : "";
-  $("hero-sub").innerHTML = `used of ${fmt(d.total)} · <b class="${low ? "low" : ""}"${tip}>${fmt(d.free)} free</b>`;
+  const tip = d.purgeable > 3e8 ? ` data-tip="${fmt(d.freeNow)} free now · macOS can clear ${fmt(d.purgeable)} more"` : "";
+  // the forecast only comes when free space has been falling steadily and would run out within two months
+  const f = status.forecast, days = f && Math.round((Date.now() / 1000 - f.from) / 86400);
+  const some = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const fore = f ? ` · <span data-tip="About ${fmt(f.perDay)} a day over the last ${days} days">full in about ${f.days < 14 ? some(f.days, "day") : some(Math.round(f.days / 7), "week")}</span>` : "";
+  $("hero-sub").innerHTML = `used of ${fmt(d.total)} · <b class="${low ? "low" : ""}"${tip}>${fmt(d.free)} free</b>${fore}`;
   bar.innerHTML = ""; chips.innerHTML = "";
   const seg = (key, lbl, bytes, col, cls) => {
     if (bytes <= 0) return;
@@ -784,7 +788,7 @@ function hoverTip(e, k) {
       : Math.abs(k.d || 0) >= 1e6 ? `<div class="k chl ${k.d < 0 ? "down" : "up"}">${sgn(k.d)}${day}</div>` : "";
     t.innerHTML = `${rest ? `<span class="tile" style="--c:var(--c-other)">…</span>` : tile(k)}
       <div style="min-width:0"><div class="n">${esc(label(k))}</div><div class="s num">${fmt(k.size)}</div></div>
-      <div class="p">${rest ? (k.ch ? "Smaller changes, grouped." : k.open ? "Smaller items, grouped. Click to open the folder." : "Smaller items, grouped. Click to list them.") : esc(tilde(k.path || k.at))}</div>
+      <div class="p">${rest ? (k.ch ? "Smaller changes" : k.open ? "Smaller items · click to open the folder" : "Smaller items · click to list") : esc(tilde(k.path || k.at))}</div>
       ${rest || gone ? "" : `<div class="k">${k.type === "dir" && !isApp(k) ? `${(k.count || 0).toLocaleString()} files · ` : ""}${CAT[k.cat] || "Other"}${k.mtime ? ` · modified ${ago(k.mtime)}` : ""}</div>`}${moved}`;
   }
   if (fresh) { t.hidden = false; t._w = t.offsetWidth; t._h = t.offsetHeight; }
@@ -800,7 +804,7 @@ function row(o) {
   const owner = ownerOf(path), icon = app ? appTile(app, item) : tile(item);
   if (how) return howRow(o, icon);
   // its app is running: the row can't be picked until the app quits. An orange tag and line say so
-  if (openApp) return `<div class="row locked isopen" data-size="${size}" data-tip="Quit ${esc(openApp)}, then this can go">${icon}
+  if (openApp) return `<div class="row locked isopen" data-size="${size}" data-tip="Quit ${esc(openApp)} to clear this">${icon}
     <div class="nm"><div class="t"><span class="tt">${esc(title)}</span><span class="tag open">Open</span></div><div class="why">Quit ${esc(openApp)} first</div></div>
     <div class="sz num">${fmt(size)}</div></div>`;
   return `<div class="row${owner ? " locked" : ""}" ${owner ? "" : `data-row="${esc(path)}"`} data-size="${size}">
@@ -863,9 +867,9 @@ function guessType(path, size) { const n = meta.get(path); return n?.type || (ex
 
 const SUGG_CAT = { Caches: "cache", Developer: "dev", Trash: "other", Downloads: "archive", "Large & old": "video", Apps: "app", "How to": "dev" };
 // what each group is, in the hint on its heading
-const GROUP_NOTE = { Caches: "Apps rebuild these by themselves when they need them", Developer: "Build files and packages. They come back the next time you build or install",
-  Downloads: "Installers for apps you already have, and files untouched for 3 months", "Large & old": "Big files untouched for 6 months or more",
-  Apps: "Apps you haven't opened in 4 months or more", "How to": "Rumi won't clear these itself. Each one shows the steps" };
+const GROUP_NOTE = { Caches: "Apps rebuild these when needed", Developer: "Come back the next time you build or install",
+  Downloads: "Installers you've used, and files untouched for 3 months", "Large & old": "Big files untouched for 6 months",
+  Apps: "Not opened in 4 months", "How to": "Rumi can't delete these. You'll have to do it manually" };
 const grp = (name, sum, note) => `<div class="grp"${note ? ` data-tip="${esc(note)}"` : ""}><span class="t">${esc(name)}</span>${sum ? `<span class="s num">${sum}</span>` : ""}${note ? `<span class="info">${ICON.info}</span>` : ""}</div>`;
 const GROUP_NAME = g => g === "How to" ? "Clear these yourself" : g === "Trash" ? BIN : g;
 
@@ -904,7 +908,7 @@ async function drawPaneBody(pane, live) {
     const safe = mine.filter(s => s.safety === "safe" && s.action !== "empty" && !s.open), safeTotal = safe.reduce((a, s) => a + back(s), 0);
     const all = mine.reduce((a, s) => a + back(s), 0);
     let h = `<div class="intro"><span class="bignum num" data-tip="What Rumi can move to the ${BIN}">${fmt(all)}</span>
-      <div class="btns"><button class="btn small" id="pick-safe" data-tip="Caches and build files that come back on their own">Select all safe · ${fmt(safeTotal)}</button></div></div>`;
+      <div class="btns"><button class="btn small" id="pick-safe" data-tip="Everything that comes back on its own">Select all safe · ${fmt(safeTotal)}</button></div></div>`;
     const order = ["Trash", "Caches", "Developer", "Downloads", "Large & old", "Apps", "How to"];
     for (const g of Object.keys(groups).sort((a, b) => order.indexOf(a) - order.indexOf(b))) {
       const items = groups[g].sort((a, b) => back(b) - back(a)), gsum = items.reduce((a, s) => a + back(s), 0);
@@ -939,12 +943,12 @@ async function drawPaneBody(pane, live) {
     if (!dupes.groups.length) { pane.innerHTML = `<div class="empty">${Rumi.svg("happy", { size: 104 })}<span class="bignum">No copies</span></div>`; return; }
     // "select all" only takes copies outside code projects, where copies are usually on purpose
     const easy = ex.filter(g => !g.project), easyN = easy.reduce((a, g) => a + g.files.length - 1, 0);
-    let h = `<div class="intro"><span class="bignum num" data-tip="Taken by extra copies. Copies that share disk space aren't counted: removing them frees almost nothing">${fmt(waste)}</span>
+    let h = `<div class="intro"><span class="bignum num" data-tip="Taken by extra copies. Ones that share disk space aren't counted">${fmt(waste)}</span>
       <div class="btns">${easyN ? `<button class="btn small" id="pick-dupes" data-tip="Keeps the oldest of each set">Select ${easyN} extra cop${easyN === 1 ? "y" : "ies"}${easy.length < ex.length ? " outside projects" : ""}</button>` : ""}</div></div>`;
     const card = (g, keepLabel) => {
       const f0 = g.files[0], it = { ...asItem(f0.path, g.cat), size: f0.size };
       let b = `<div class="card"><div class="chd">${tile(it)}<div style="min-width:0"><div class="t">${esc(base(f0.path))}</div>
-        <div class="m num">${g.files.length} copies · ${fmt(g.size)} each${g.project ? ` · <span class="tag review">In a project</span>` : ""}${g.clones ? ` · <span class="tag keep" data-tip="Some of these copies share disk space, so removing them frees less">Shared space</span>` : ""}</div></div><div class="save num">${fmt(g.waste)}<small>${g.kind === "exact" ? "to free" : "if not needed"}</small></div></div>`;
+        <div class="m num">${g.files.length} copies · ${fmt(g.size)} each${g.project ? ` · <span class="tag review">In a project</span>` : ""}${g.clones ? ` · <span class="tag keep" data-tip="These share disk space, so removing them frees less">Shared space</span>` : ""}</div></div><div class="save num">${fmt(g.waste)}<small>${g.kind === "exact" ? "to free" : "if not needed"}</small></div></div>`;
       const apart = tellApart(g.files.map(f => f.path));   // same name in different folders: the folder that differs follows, faint
       g.files.forEach((f, i) => {
         keepMeta(f.path, asItem(f.path, g.cat));
@@ -958,15 +962,15 @@ async function drawPaneBody(pane, live) {
       });
       return b + `</div>`;
     };
-    if (ex.length) { h += grp("Identical", fmt(waste), "The same file, byte for byte. Rumi keeps the oldest of each"); ex.slice(0, 150).forEach(g => h += card(g, "Keep")); }
-    if (sim.length) { h += grp("Possible versions", "", "Same name, different contents. Check which one you need"); sim.slice(0, 100).forEach(g => h += card(g, "Newest")); }
+    if (ex.length) { h += grp("Identical", fmt(waste), "Exact copies. Rumi keeps the oldest"); ex.slice(0, 150).forEach(g => h += card(g, "Keep")); }
+    if (sim.length) { h += grp("Possible versions", "", "Same name, different contents"); sim.slice(0, 100).forEach(g => h += card(g, "Newest")); }
     pane.innerHTML = h;
     const pd = $("pick-dupes"); if (pd) pd.onclick = () => { easy.forEach(g => g.files.slice(1).forEach(f => { picked.set(f.path, f.size); keepMeta(f.path, asItem(f.path, g.cat)); })); syncSelection(); };
   }
 
   if (tab === "biggest") {
     const list = overview.biggest, max = list[0]?.size || 1;
-    pane.innerHTML = `<div class="intro"><span class="bignum num" data-tip="Your ${list.length} largest files, added up">${fmt(list.reduce((a, f) => a + f.size, 0))}</span></div>` +
+    pane.innerHTML = `<div class="intro"><span class="bignum num" data-tip="Your ${list.length} largest files">${fmt(list.reduce((a, f) => a + f.size, 0))}</span></div>` +
       list.map(f => row({ path: f.path, size: f.size, title: base(f.path), max, sizeNote: ago(f.mtime), item: { ...asItem(f.path, f.cat), size: f.size } })).join("");
   }
 
@@ -1301,7 +1305,7 @@ async function findGo(k, mode) {
   const el = document.querySelector(`#map .layer:not(.leaving) .b[data-path="${CSS.escape(k.path)}"]`);
   const item = meta.get(k.path) || k;
   if (!onMap && viewable(item)) return openViewer(item, el);
-  if (!el) return toast(`<span>${esc(label(k))} is too small to have its own cartridge here</span><button class="btn small" id="toast-show">Show in Finder</button>`, 6000), ($("toast-show").onclick = () => reveal(k.path));
+  if (!el) return toast(`<span>${esc(label(k))} is too small to show here</span><button class="btn small" id="toast-show">Show in Finder</button>`, 6000), ($("toast-show").onclick = () => reveal(k.path));
   el.classList.remove("found"); void el.offsetWidth; el.classList.add("found");
 }
 // the menu-bar panel's ⌥↵: show this on the map (the app brings its window forward first)
@@ -1349,7 +1353,7 @@ function clearFilters() { focusAge = 0; closeKinds(); setFocus(null); }
 /* Untouched: only what hasn't been modified for 6 months, a year or two years. It's a filter like the kinds (the map
    shows just the matches, nothing fades) and works with one: "Video" and "1 year" together are old videos. By itself
    it's every file the map keeps, outside apps. The button sits on the path row, where the filter's summary shows. */
-const ageBtn = () => `<button class="agebtn${focusAge ? " on" : ""}" id="age-btn" aria-haspopup="menu" data-tip="${focusAge ? `Not modified for ${ageName()} or more` : "Show only what hasn't been touched for a while"}">${ICON.clock}${focusAge ? ageName() + "+" : "Untouched"}</button>`;
+const ageBtn = () => `<button class="agebtn${focusAge ? " on" : ""}" id="age-btn" aria-haspopup="menu" data-tip="${focusAge ? `Not modified for ${ageName()} or more` : "Show only what you haven't touched in a while"}">${ICON.clock}${focusAge ? ageName() + "+" : "Untouched"}</button>`;
 function setAge(days) { changedOn = false; focusAge = days; open(current, null, "filter"); }
 function openAges(btn, keyboard) {
   const p = $("kpop"), where = current, key = `ages|${where}|${focusCat}|${filterMask()}`;
@@ -1472,7 +1476,7 @@ function wholeSet(paths, groups) {
   const own = new Set(paths), has = f => own.has(f) || paths.some(p => f.startsWith(p + "/"));
   return (groups || []).find(g => g.kind === "exact" && g.files.length > 1 && g.files.some(f => own.has(f.path)) && g.files.every(f => has(f.path)));
 }
-const keepOneToast = g => toast(`<span>That's every copy of ${esc(base(g.files[0].path))}. Leave one out.</span>`, 5000);
+const keepOneToast = g => toast(`<span>That's every copy of ${esc(base(g.files[0].path))}. Keep one.</span>`, 5000);
 // 1 · the question. × on a line leaves that one out.
 function openConfirm(items) {
   closeInsp();
@@ -1562,7 +1566,7 @@ async function binScreen(moved = 0, skipped = "") {
   if (moved) { beep(660, .07); beep(880, .1, .08); const big = $("sc-big"); tween(700, t => { big.textContent = fmt(moved * t); }); }
   const un = $("sc-undo"); un.hidden = !(moved && lastTrashed.length); un.onclick = () => { CF.state = ""; hide("confirm"); undoTrash(); };
   const [, hold] = scKeys(["k-b", moved ? "Done" : "Cancel", cfClose], ["k-a", `Empty ${BIN}`]);
-  hold.dataset.tip = `Hold to empty. Everything in the ${BIN} is deleted for good`;
+  hold.dataset.tip = `Hold to empty · can't be undone`;
   const t = { duration: HOLD_MS, easing: "linear", fill: "both" };
   const shake = Array.from({ length: 13 }, (_, i) => ({ transform: `translateX(${(i === 12 ? 0 : (i % 2 ? -1 : 1) * 2.6 * i / 12).toFixed(2)}px)` }));
   holdKey(hold, REDUCED.matches ? [] : [
@@ -1765,7 +1769,7 @@ const keepFolder = p => !p || p === HOME || (status?.roots || []).includes(p) ||
 function trashOne(p) {
   const k = meta.get(p) || asItem(p), owner = ownerOf(p);
   if (owner) return toast(`<span>Part of ${esc(owner)}, so it stays</span>`, 4000);
-  if (keepFolder(p)) return toast(`<span>${esc(label(k) || p)} stays. Open it to pick what's inside.</span>`, 4000);
+  if (keepFolder(p)) return toast(`<span>${esc(label(k) || p)} stays. Pick what's inside it.</span>`, 4000);
   openConfirm([{ path: p, size: sizeOf(p) }]);
 }
 async function contextMenu(p) {
@@ -1829,7 +1833,7 @@ function showPlaceCard() {
   if ($("place-quit")) return;
   Rumi.mount($("access-rumi"), "idle", { size: 92 });
   $("access-h").textContent = "Move Rumi to Applications first";
-  $("access-p").textContent = "This copy is still inside the download. Drag Rumi onto Applications in that window, then open it from there.";
+  $("access-p").textContent = "Drag Rumi onto Applications, then open it from there.";
   $("access").querySelector("ol").remove();
   $("access").querySelector(".acts").innerHTML = `<button class="btn primary" id="place-quit">Quit</button>`;
   $("place-quit").onclick = () => api("/native/quit", {});
@@ -1927,7 +1931,7 @@ async function poll() {
 }
 function drawDenied() {
   $("denied-note")?.remove();
-  if (status?.denied) $("status").insertAdjacentHTML("beforeend", `<button id="denied-note" class="linkish" data-tip="${NATIVE ? "Folders macOS keeps private. Click to give Rumi access" : "Folders macOS keeps private"}">${ICON.lock}${status.denied.toLocaleString()} private</button>`);
+  if (status?.denied) $("status").insertAdjacentHTML("beforeend", `<button id="denied-note" class="linkish" data-tip="${NATIVE ? "Private folders · click to give access" : "Folders macOS keeps private"}">${ICON.lock}${status.denied.toLocaleString()} private</button>`);
   const dn = $("denied-note"); if (dn && NATIVE) dn.onclick = showAccess;
 }
 const since = t => {
@@ -1941,7 +1945,8 @@ function drawFresh() {
   b.classList.toggle("busy", busy); b.setAttribute("aria-busy", busy);
   drawBrand();
   $("rescan-l").textContent = busy ? "Updating" : "Rescan";
-  b.dataset.tip = busy ? "Updating in the background" : status.scannedAt ? `Updated ${since(status.scannedAt)} · ⌘R` : "⌘R";
+  // "live": Rumi is following changes on disk as they happen, so there's no age to give
+  b.dataset.tip = busy ? "Updating" : status.live ? "Up to date · ⌘R to rescan" : status.scannedAt ? `Updated ${since(status.scannedAt)} · ⌘R to rescan` : "⌘R to rescan";
 }
 // One quiet loop while anything runs behind the map: a rescan (swap in the fresh map when done) or the duplicate check.
 let watching = false, dupesRev = null;
@@ -1970,7 +1975,22 @@ async function softRefresh() {
   const p = await nearestFolder(current);
   if ($("insp").hidden && $("confirm").hidden) await open(p, null, "soft");
   else current = p;
-  drawPane(); setBadges();
+  await drawPane(); setBadges();
+}
+// Files changed on disk while the map was open, and Rumi followed (Live.swift calls this): redraw where the user is, once
+// they've been still for a few seconds and nothing is open over the map. The side list keeps its place.
+let liveAsked = false, lastInput = 0;
+for (const ev of ["pointermove", "pointerdown", "keydown", "wheel"]) addEventListener(ev, () => { lastInput = performance.now(); }, { capture: true, passive: true });
+async function liveMoved() {
+  if (liveAsked) return; liveAsked = true;
+  const busy = () => document.hidden || dialogUp() || status?.refreshing || performance.now() - lastInput < 4000
+    || ["insp", "kpop", "viewer", "find"].some(id => !$(id).hidden);
+  while (busy()) await wait(1000);
+  liveAsked = false;
+  try { status = await api("/api/status"); } catch { return; }
+  const pane = $("pane"), y = pane.scrollTop;
+  await softRefresh(); drawFresh();
+  pane.scrollTop = y;
 }
 // the folder itself if it's still on the map, else the closest folder above it that is ("" is This Mac)
 async function nearestFolder(p) {

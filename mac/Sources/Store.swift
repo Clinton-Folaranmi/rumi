@@ -65,6 +65,11 @@ func fileExt(_ name: String) -> String {
 
 func fileCat(_ name: String, _ ctx: Int?) -> Int { ctx ?? EXT[fileExt(name)] ?? CAT_OTHER }
 
+/// The space a file takes, as this one name's share of it. A hard-linked file has several names, often in different
+/// folders, and its data exists once: each name counts an equal part. (Counting it whole wherever a scan met it first made
+/// folders swap sizes between scans, and a folder listed on its own couldn't know whether the file was already counted.)
+func sharedAlloc(_ st: stat) -> Int64 { Int64(st.st_blocks) * 512 / Int64(max(1, st.st_nlink)) }
+
 /// A directory entry's name.
 func direntName(_ ent: UnsafeMutablePointer<dirent>) -> String {
     withUnsafePointer(to: &ent.pointee.d_name) {
@@ -121,7 +126,7 @@ final class Dir {
     }
 
     func addFile(_ name: String, _ st: stat, ctx: Int?, fullPath: () -> String, big: inout [BigFile], kt: inout [Int64]) {
-        let alloc = Int64(st.st_blocks) * 512
+        let alloc = sharedAlloc(st)
         let ext = fileExt(name)
         let c = ctx ?? (EXT[ext] ?? CAT_OTHER)
         if ctx == nil, let k = KIND_OF[ext] { kinds |= 1 << UInt32(k); kt[k * 2] += 1; kt[k * 2 + 1] += alloc }
@@ -231,8 +236,14 @@ final class Store {
     /// in its Trash folder, so the Trash's size is the scanned size plus this. Guarded by `lock`.
     var trashedSince: Int64 = 0
 
-    private var seenLinks = Set<UInt64>()
-    private let linkLock = NSLock()
+
+    // Live updates (Live.swift). Guarded by `lock`.
+    /// The map holds every change up to this file-system event; the next launch replays from here.
+    var liveEvent: UInt64 = 0
+    /// When the last full scan landed. Live updates are close but not exact (see Live.swift), so a full one still runs weekly.
+    var liveFull: Double = 0
+    /// The map has live changes the saved file doesn't.
+    var liveDirty = false
 
     // MARK: scanning
 
@@ -262,26 +273,78 @@ final class Store {
     }
 
     private func progress(_ n: Int, _ path: String) {
+        guard scanning else { return }   // a new folder being added to a live map isn't a scan to report
         progressLock.lock()
         filesSeen += n
         current = path
         progressLock.unlock()
     }
 
+    /// What listing some folders found, before it joins the map.
+    struct Found { var big: [BigFile] = []; var denied: [String] = []; var kinds: [Int64] = []; var cats: [Int64] = [] }
+
     private func runScan(gen: Int, background: Bool = false) {
-        linkLock.lock(); seenLinks.removeAll(); linkLock.unlock()
+        let since = Live.eventNow()   // changes made while this scan runs are replayed from here once it lands
         let top = Dir(name: "This Mac", parent: nil)
-        let queue = WorkQueue()
+        let jobs = rootJobs(top)
+        // the quiet launch rescan leaves room for the person using the app: two workers, and a pause while the viewer is open
+        let found = scan(top, jobs: jobs, workers: background ? 2 : max(4, ProcessInfo.processInfo.activeProcessorCount), background: background)
+        let totals = found.cats, kinds = found.kinds, den = found.denied
+        let idx = Store.buildIndex(top)
+        let big = found.big.sorted { $0.alloc > $1.alloc }   // biggest first, kept that way
+        let now = Date().timeIntervalSince1970
+        // the tree isn't shared yet, so it can be compared and encoded without holding the lock
+        let base = Changes.compare(top, roots: roots, now: now)   // marks what grew, shrank, is new or gone since last time
+        let saved = Snapshot.encode(top: top, roots: roots, scannedAt: now, files: top.count, big: big, cats: totals, denied: den, kinds: kinds,
+                                    baselineAt: base.at, baseUsed: base.used)
+        History.record(at: now, top: top)
+
+        lock.lock()
+        // the old map moves into locals and is freed after the unlock, not while the page waits on the lock
+        let old = (root, index, bigFiles)
+        root = top
+        index = idx
+        bigFiles = big
+        catTotals = totals
+        kindTotals = kinds
+        denied = den
+        baselineAt = base.at; baseUsed = base.used; churnStale = false
+        let edited = replayTrash()   // things trashed while this scan ran may still be in the new tree
+        trashedSince = 0             // the new map has the Trash as it is now
+        dupes.status = "running"   // the duplicate check starts right below; unload() waits for it
+        scanning = false
+        fromSaved = false
+        unloaded = false
+        finished = now
+        liveEvent = since; liveFull = now; liveDirty = false
+        lock.unlock()
+        withExtendedLifetime(old) {}
+        // a replayed trash changed the tree after it was encoded: save the edited one instead
+        if edited { Snapshot.saveSoon() } else { Snapshot.write(saved); Live.save(event: since, at: now, full: now) }
+        NSLog("Rumi: scanned \(filesSeen) files in \(String(format: "%.1f", finished - started)) s")
+        DispatchQueue.global(qos: .utility).async { findDuplicates(gen: gen) }
+        Hidden.measure()   // the system side changes too; measure it fresh for the "macOS keeps this" card
+        Live.follow(since: since)
+    }
+
+    /// A job for each mapped folder, hung under `top`.
+    func rootJobs(_ top: Dir) -> [Work] {
+        var jobs: [Work] = []
         for r in roots {
             var st = stat()
             guard lstat(r, &st) == 0, st.st_mode & S_IFMT == S_IFDIR else { continue }
             let node = Dir(name: r, parent: top)
             top.dirs.append(node)
-            queue.push(Work(dir: node, path: r, ctx: dirContext((r as NSString).lastPathComponent, nil), dev: st.st_dev))
+            jobs.append(Work(dir: node, path: r, ctx: dirContext((r as NSString).lastPathComponent, nil), dev: st.st_dev))
         }
-        // Every folder is its own job: workers list a folder, keep its files, and queue its subfolders.
-        // the quiet launch rescan leaves room for the person using the app: two workers, and a pause while the viewer is open
-        let workers = background ? 2 : max(4, ProcessInfo.processInfo.activeProcessorCount)
+        return jobs
+    }
+
+    /// List `jobs` and everything under them, then roll sizes up to `top`. Every folder is its own job: workers list a
+    /// folder, keep its files, and queue its subfolders.
+    func scan(_ top: Dir, jobs: [Work], workers: Int, background: Bool) -> Found {
+        let queue = WorkQueue()
+        jobs.forEach(queue.push)
         var bigs = [[BigFile]](repeating: [], count: workers)
         var denieds = [[String]](repeating: [], count: workers)
         var kts = [[Int64]](repeating: [], count: workers)
@@ -308,42 +371,9 @@ final class Store {
         }
         let totals = top.catv ?? [Int64](repeating: 0, count: 9)
         top.catv = nil
-        let idx = Store.buildIndex(top)
-        let big = bigs.flatMap { $0 }.sorted { $0.alloc > $1.alloc }, den = denieds.flatMap { $0 }   // biggest first, kept that way
         var kinds = [Int64](repeating: 0, count: KINDS.count * 2)
         for kt in kts where kt.count == kinds.count { for i in kinds.indices { kinds[i] += kt[i] } }
-        let now = Date().timeIntervalSince1970
-        // the tree isn't shared yet, so it can be compared and encoded without holding the lock
-        let base = Changes.compare(top, roots: roots, now: now)   // marks what grew, shrank, is new or gone since last time
-        let saved = Snapshot.encode(top: top, roots: roots, scannedAt: now, files: top.count, big: big, cats: totals, denied: den, kinds: kinds,
-                                    baselineAt: base.at, baseUsed: base.used)
-        History.record(at: now, top: top)
-
-        lock.lock()
-        // the old map moves into locals and is freed after the unlock, not while the page waits on the lock
-        let old = (root, index, bigFiles)
-        root = top
-        index = idx
-        bigFiles = big
-        catTotals = totals
-        kindTotals = kinds
-        denied = den
-        baselineAt = base.at; baseUsed = base.used; churnStale = false
-        let edited = replayTrash()   // things trashed while this scan ran may still be in the new tree
-        trashedSince = 0             // the new map has the Trash as it is now
-        dupes.status = "running"   // the duplicate check starts right below; unload() waits for it
-        scanning = false
-        fromSaved = false
-        unloaded = false
-        finished = now
-        lock.unlock()
-        withExtendedLifetime(old) {}
-        linkLock.lock(); seenLinks = []; linkLock.unlock()   // only needed while scanning (it can hold hundreds of thousands of entries)
-        // a replayed trash changed the tree after it was encoded: save the edited one instead
-        if edited { Snapshot.saveSoon() } else { Snapshot.write(saved) }
-        NSLog("Rumi: scanned \(filesSeen) files in \(String(format: "%.1f", finished - started)) s")
-        DispatchQueue.global(qos: .utility).async { findDuplicates(gen: gen) }
-        Hidden.measure()   // the system side changes too; measure it fresh for the "macOS keeps this" card
+        return Found(big: bigs.flatMap { $0 }, denied: denieds.flatMap { $0 }, kinds: kinds, cats: totals)
     }
 
     static func buildIndex(_ top: Dir) -> [String: Dir] {
@@ -372,6 +402,7 @@ final class Store {
             finished = s.scannedAt
             baselineAt = s.baselineAt; baseUsed = s.baseUsed
             fromSaved = true
+            liveEvent = 0; liveDirty = false   // where this map stands in the file-system log is in the file beside it (Live.bringCurrent)
             if let g = groups { dupes.groups = g; dupes.status = "done"; dupes.rev += 1 }
         }
         lock.unlock()
@@ -382,7 +413,13 @@ final class Store {
     /// file has them and reads back in about half a second (ensureLoaded). Not while a scan or a duplicate check runs.
     @discardableResult func unload() -> Bool {
         lock.lock()
-        guard root != nil, !scanning, !loading, dupes.status != "running" else { lock.unlock(); return false }
+        let can = root != nil && !scanning && !loading && dupes.status != "running"
+        lock.unlock()
+        guard can else { return false }
+        Live.stop()   // before the lock: an update under way finishes first (it needs the lock too)
+        lock.lock()
+        guard root != nil, !scanning, !loading, dupes.status != "running" else { lock.unlock(); Live.bringCurrent(); return false }
+        if liveDirty { Snapshot.saveNow(self) }   // live changes the saved file doesn't have yet
         let old = (root, index, bigFiles, dupes.groups)
         root = nil; index = [:]; bigFiles = []; dupes.groups = []; dupes.status = "idle"; suggested = []; suggestedApp = [:]
         unloaded = true
@@ -396,13 +433,14 @@ final class Store {
     /// running doesn't stop this: the saved map shows until the new one lands (loadSaved never replaces a newer map).
     func ensureLoaded() {
         lock.lock()
-        guard root == nil, unloaded, !loading else { lock.unlock(); return }
+        guard root == nil, unloaded, !loading else { lock.unlock(); Live.bringCurrent(); return }
         loading = true
         lock.unlock()
         DispatchQueue.global(qos: .userInitiated).async { [self] in
             loadSaved()
             lock.lock(); let none = root == nil; if !none { unloaded = false }; lock.unlock()
-            if none, access != "needed" { startScan() }   // the saved file is gone or unreadable: scan
+            if none { if access != "needed" { startScan() } }   // the saved file is gone or unreadable: scan
+            else { Live.bringCurrent() }
         }
     }
 
@@ -431,24 +469,16 @@ final class Store {
                 }
                 continue
             }
-            guard notDuplicateLink(st) else { continue }
             d.addFile(name, st, ctx: job.ctx, fullPath: { job.path + "/" + name }, big: &big, kt: &kt)
             local += 1
             if local & 4095 == 0 { progress(4096, job.path) }
         }
     }
 
-    private func notDuplicateLink(_ st: stat) -> Bool {
-        if st.st_nlink <= 1 { return true }
-        let key = (UInt64(UInt32(bitPattern: st.st_dev)) << 40) ^ UInt64(st.st_ino)
-        linkLock.lock(); defer { linkLock.unlock() }
-        return seenLinks.insert(key).inserted
-    }
-
     // MARK: edits after Move to Trash / Empty Trash
 
     /// Remove a trashed path from the tree and fix sizes upward. Call with `lock` held.
-    /// `size`: the allocated bytes (st_blocks × 512) of a file trashed by path, read before it moved. Files under
+    /// `size`: the space (sharedAlloc) of a file trashed by path, read before it moved. Files under
     /// 512 KB aren't in the tree, only in their folder's `small` total, so without it the map can't shrink for them.
     func detach(_ p: String, size: Int64? = nil) {
         if scanning { scanTrash.paths.append(p) }
@@ -466,7 +496,7 @@ final class Store {
 
     /// Returns whether the tree changed.
     @discardableResult
-    private func detachNow(_ p: String, size: Int64?) -> Bool {
+    func detachNow(_ p: String, size: Int64?) -> Bool {
         let parentPath = (p as NSString).deletingLastPathComponent
         let name = (p as NSString).lastPathComponent
         guard let parent = index[parentPath] else { return false }
@@ -539,7 +569,7 @@ final class Store {
     }
 
     /// The category a folder's files take from an enclosing app, developer or cache folder (nil: by extension).
-    private func context(of d: Dir) -> Int? {
+    func context(of d: Dir) -> Int? {
         var chain: [Dir] = []
         var n: Dir? = d
         while let m = n, m.parent != nil {
@@ -567,7 +597,7 @@ final class Store {
     }
 
     /// One file leaves the category totals, and the kind totals if it counted there (outside app/dev/cache folders).
-    private func uncount(_ name: String, _ alloc: Int64, cat: Int, ctx: Int?) {
+    func uncount(_ name: String, _ alloc: Int64, cat: Int, ctx: Int?) {
         catTotals[cat] = max(0, catTotals[cat] - alloc)
         if ctx == nil, let k = KIND_OF[fileExt(name)], kindTotals.count > k * 2 + 1 {
             kindTotals[k * 2] = max(0, kindTotals[k * 2] - 1)

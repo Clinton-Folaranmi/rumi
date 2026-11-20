@@ -89,7 +89,7 @@ enum Filter {
             guard let k = KIND_OF[fileExt(name)], mask & (1 << UInt32(k)) != 0 else { continue }
             var st = stat()
             guard fstatat(fd, name, &st, AT_SYMLINK_NOFOLLOW) == 0 else { continue }
-            hits.append(Hit(path: p + "/" + name, name: name, size: Int64(st.st_blocks) * 512,
+            hits.append(Hit(path: p + "/" + name, name: name, size: sharedAlloc(st),
                             mtime: Double(st.st_mtimespec.tv_sec), cat: KINDS[k].cat, dir: false, pkg: false))
         }
     }

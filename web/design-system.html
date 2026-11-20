@@ -56,7 +56,7 @@
 <body>
 <div class="ds">
   <div class="ds-top"><h1>Rumi</h1><p>Design system · the shipping look is <b>Cartridge</b>. Everything here is drawn with the app's own CSS.</p></div>
-  <nav class="ds-nav"><a href="#rules">Rules</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#shape">Shape</a><a href="#motion">Motion</a><a href="#buttons">Buttons</a><a href="#chips">Chips &amp; menu</a><a href="#cartridges">Cartridges</a><a href="#changed">What changed</a><a href="#rows">List rows</a><a href="#cleanup">Clean up</a><a href="#search">Search</a><a href="#viewer">Viewer</a><a href="#nav">Path &amp; status</a><a href="#keys">Keyboard</a><a href="#open">Open decisions</a></nav>
+  <nav class="ds-nav"><a href="#rules">Rules</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#shape">Shape</a><a href="#motion">Motion</a><a href="#buttons">Buttons</a><a href="#chips">Chips &amp; menu</a><a href="#cartridges">Cartridges</a><a href="#changed">What changed</a><a href="#watch">Keeps watch</a><a href="#rows">List rows</a><a href="#cleanup">Clean up</a><a href="#search">Search</a><a href="#viewer">Viewer</a><a href="#nav">Path &amp; status</a><a href="#keys">Keyboard</a><a href="#open">Open decisions</a></nav>
 
   <section class="ds-s" id="rules">
     <h2>Rules</h2>
@@ -144,6 +144,17 @@
     <div class="states" id="since-states"></div>
     <div class="grid g4" id="chg-carts" style="margin-top:18px"></div>
     <div class="spec"><b>Two colours:</b> orange grew or is new, green shrank (here, and only here, colour isn't the kind). <b>Removed</b> is an empty dashed slot, like free space on the shelf. <b>One number per cartridge:</b> the change, signed. The label's heading says which way (Grew, New, Shrank, Removed). <b>Hint on the chip:</b> the three things that moved most. <b>The comparison scan</b> stays the same for the day: it's replaced when the scan being retired is 12 hours older than the new one.</div>
+  </section>
+
+  <section class="ds-s" id="watch">
+    <h2>Keeps watch</h2>
+    <p class="lead">Rumi follows changes on disk by itself. It asks macOS which folders changed since the map was saved and reads only those, so opening it doesn't start a scan. While the window is open the map keeps up every few seconds; it redraws only after 5 MB or more has moved, and only once the pointer and keys have been still for four seconds, so nothing shifts under the hand.</p>
+    <div class="states">
+      <div class="state"><span class="lab">Up to date (hint on Rescan)</span><span class="hint static">Up to date · ⌘R to rescan</span></div>
+      <div class="state"><span class="lab">Not watching yet</span><span class="hint static">Updated 3 hours ago · ⌘R to rescan</span></div>
+      <div class="state"><span class="lab">The forecast, in the header line</span><div class="hero" style="margin:0"><div class="sub" style="margin:0">used of 245 GB · <b class="low">24 GB free</b> · <span data-tip="About 1.4 GB a day over the last 16 days">full in about 3 weeks</span></div></div></div>
+    </div>
+    <div class="spec"><b>Forecast:</b> plain text after the free space, never coloured, with the pace in its hint. It shows only when free space has fallen steadily for a week or more and would run out within 60 days; otherwise there is nothing there. <b>Days</b> under two weeks, <b>weeks</b> after. <b>No date:</b> "about 3 weeks" promises less than "Dec 11".</div>
   </section>
 
   <section class="ds-s" id="rows">
@@ -329,11 +340,11 @@ const ICON = { lock: `<svg class="i lk" viewBox="0 0 16 16"><rect x="3.5" y="7" 
   finder: `<svg class="i" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M12 9.5v3c0 .6-.4 1-1 1H3.5c-.6 0-1-.4-1-1V5c0-.6.4-1 1-1h3"/></svg>` };
 const INFO = `<svg class="i" viewBox="0 0 16 16" style="width:13px;height:13px"><circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.7M8 5.2v.1"/></svg>`;
 $("clean-demo").innerHTML = `<div class="intro"><span class="bignum num" data-tip="What Rumi can move to the Trash">8.9 GB</span><div class="btns"><button class="btn small">Select all safe · 6.5 GB</button></div></div>`
-  + `<div class="grp" data-tip="Apps rebuild these by themselves when they need them"><span class="t">Caches</span><span class="s num">8.9 GB</span><span class="info">${INFO}</span></div>`
-  + `<div class="row locked isopen" data-tip="Quit Browser, then this can go">${tile("cache")}<div class="nm"><div class="t"><span class="tt">Browser</span><span class="tag open">Open</span></div><div class="why">Quit Browser first</div></div><div class="sz num">5.10 GB</div></div>`
+  + `<div class="grp" data-tip="Apps rebuild these when needed"><span class="t">Caches</span><span class="s num">8.9 GB</span><span class="info">${INFO}</span></div>`
+  + `<div class="row locked isopen" data-tip="Quit Browser to clear this">${tile("cache")}<div class="nm"><div class="t"><span class="tt">Browser</span><span class="tag open">Open</span></div><div class="why">Quit Browser first</div></div><div class="sz num">5.10 GB</div></div>`
   + `<div class="row"><input type="checkbox">${tile("cache")}<div class="nm"><div class="t"><span class="tt">Packages</span><span class="tag safe">Safe</span></div><div class="why">Downloaded again when needed</div></div><div class="sz num" data-tip="Uses 1.4 GB. 1.1 GB is shared with copies elsewhere, so removing this frees 270 MB">270 MB<small>of 1.4 GB</small></div></div>`
   + `<div class="row"><input type="checkbox">${tile("cache")}<div class="nm"><div class="t"><span class="tt">Models</span><span class="tag review">Check first</span></div><div class="why">A tool's downloads · see what's inside</div></div><div class="sz num">2.2 GB</div></div>`
-  + `<div class="grp" data-tip="Rumi won't clear these itself. Each one shows the steps"><span class="t">Clear these yourself</span><span class="s num">11.3 GB</span><span class="info">${INFO}</span></div>`
+  + `<div class="grp" data-tip="Rumi can't delete these. You'll have to do it manually"><span class="t">Clear these yourself</span><span class="s num">11.3 GB</span><span class="info">${INFO}</span></div>`
   + `<div class="row nochk how">${tile("app")}<div class="nm"><div class="t"><span class="tt">Sandbox's virtual machine</span><span class="tag keep">Won't touch</span></div><div class="why">Can hold your work</div></div><div class="sz num">9.4 GB</div><div class="hov"><button>${INFO}How to</button><button>${ICON.finder}Finder</button></div></div>`
   + `<div class="row nochk how inspected">${tile("dev")}<div class="nm"><div class="t"><span class="tt">Package store</span><span class="tag safe">Safe</span></div><div class="why">Shared with your projects</div></div><div class="sz num">1.9 GB</div><div class="hov"><button>${INFO}How to</button><button>${ICON.finder}Finder</button></div></div>`;
 $("bin-demo-face").innerHTML = Rumi.face("happy", 84);

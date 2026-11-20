@@ -21,7 +21,7 @@ enum Access {
         let S = Store.shared
         if S.access == "needed", granted() || UserDefaults.standard.bool(forKey: "skippedFullDiskAccess") {
             S.access = granted() ? "granted" : "skipped"
-            if scan { S.startScan(quiet: true) }
+            if scan { Live.bringCurrent() }   // from the file-system log when it can, else a quiet scan
         }
     }
 
@@ -108,6 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         }
         if !testRun {   // every 20 s: with the window closed and search unused for a while, let memory go
             Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.idleTick() }
+            // every ten minutes: note how full the disk is, if the last note is an hour old (for the forecast)
+            Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { _ in DispatchQueue.global(qos: .utility).async { History.sample() } }
         }
         // search from anywhere: the menu-bar cartridge and its shortcut (not in test runs, which would add a second cartridge)
         QuickSearch.shared.makeConfig = { [unowned self] in self.makeConfig() }
@@ -120,7 +122,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             launchedAt = Date()
             Store.shared.loading = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
             DispatchQueue.global(qos: .userInteractive).async { Store.shared.loadSaved() }
-            Store.shared.access = "granted"; Store.shared.startScan()
+            Store.shared.access = "granted"
+            Live.report = { print("live:", $0) }
+            // RUMI_LIVE=1: bring the saved map up to date as a real launch does, instead of the full scan test runs use
+            if ProcessInfo.processInfo.environment["RUMI_LIVE"] == "1" { Live.bringCurrent() } else { Store.shared.startScan() }
             window.setFrameOrigin(NSPoint(x: -6000, y: 0))
             let out = CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : "/tmp/rumi.png"
             let page = CommandLine.arguments.count > i + 2 ? CommandLine.arguments[i + 2] : "index.html"
@@ -132,12 +137,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             Store.shared.access = "misplaced"   // the page shows one card: move me to Applications
             web?.load(URLRequest(url: URL(string: "rumi://app/index.html")!))
         } else if atLogin {
-            // nothing is on screen: the saved map stays on disk, and the quiet rescan waits three minutes for login to settle
+            // nothing is on screen: the saved map stays on disk and is brought up to date when it's first asked for.
+            // With nothing saved yet, the first scan waits three minutes for login to settle
             Store.shared.unloaded = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
             Access.refresh(scan: false)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 180) { if Store.shared.access != "needed" { Store.shared.startScan(quiet: true) } }
+            if !Store.shared.unloaded {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 180) { if Store.shared.access != "needed", Store.shared.root == nil { Store.shared.startScan(quiet: true) } }
+            }
         } else {
-            // last launch's map opens right away; the scan Access.refresh starts then refreshes it quietly
+            // last launch's map opens right away; Access.refresh then brings it up to date quietly
             Store.shared.loading = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
             DispatchQueue.global(qos: .userInteractive).async { Store.shared.loadSaved() }
             Access.refresh()
@@ -160,7 +168,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 if tries == 0 { print("while updating:", r) }
                 if ((r["refreshing"] as? Bool ?? false) || Date() < self.holdUntil) && tries < 600 { return self.afterRefresh(tries: tries + 1) }
                 print(String(format: "after update (%.1f s):", Date().timeIntervalSince(self.launchedAt)), r)
-                NSApp.terminate(nil)
+                // RUMI_LIVE_CHECK=1: scan everything afresh and say where the live map disagrees
+                guard ProcessInfo.processInfo.environment["RUMI_LIVE_CHECK"] == "1" else { return NSApp.terminate(nil) }
+                DispatchQueue.global(qos: .userInitiated).async { print(Store.shared.liveCheck()); DispatchQueue.main.async { NSApp.terminate(nil) } }
             }
         }
     }
@@ -195,6 +205,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     func applicationDidBecomeActive(_ note: Notification) { Access.refresh() }
+    /// Changes Rumi folded into the map by itself are saved before it goes.
+    func applicationWillTerminate(_ note: Notification) {
+        guard !CommandLine.arguments.contains("--snapshot") else { return }
+        let S = Store.shared
+        Live.stop()
+        S.lock.lock(); if S.liveDirty, !S.scanning { Snapshot.saveNow(S) }; S.lock.unlock()
+        Snapshot.writeQ.sync {}
+    }
+
+    private var movedBytes: Int64 = 0, movedTold = Date.distantPast
+    /// Files changed on disk and the map followed: tell the page, once enough has moved to be worth a redraw and not
+    /// more often than every 20 seconds.
+    func mapMoved(_ bytes: Int64) {
+        movedBytes += bytes
+        guard movedBytes >= 5 << 20, Date().timeIntervalSince(movedTold) >= 20, let web = web else { return }
+        movedBytes = 0; movedTold = Date()
+        web.evaluateJavaScript("window.liveMoved && liveMoved()")
+    }
     // Closing the window leaves Rumi in the menu bar, so search stays one click away. ⌘Q (or the cartridge's menu) quits.
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ app: NSApplication, hasVisibleWindows flag: Bool) -> Bool { if !flag { showMainWindow() }; return true }
@@ -372,6 +400,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         NSApp.mainMenu = main
         NSApp.windowsMenu = win
     }
+}
+
+// `Rumi --check-forecast`: what the forecast says for made-up histories (one free-space reading a day, in GB).
+if CommandLine.arguments.contains("--check-forecast") {
+    let now = Date().timeIntervalSince1970
+    func run(_ name: String, _ free: [Double]) {
+        let lines = free.enumerated().map { ["t": now - Double(free.count - 1 - $0.offset) * 86400, "free": $0.element * 1e9] as [String: Any] }
+        let f = History.forecast(now: now, free: Int64((free.last ?? 0) * 1e9), lines: lines)
+        print(name + ":", f.map { "full in \(Int($0["days"] as? Double ?? 0)) days, \(Int(($0["perDay"] as? Double ?? 0) / 1e6)) MB a day" } ?? "no forecast")
+    }
+    run("falling steadily", [40, 38.6, 37.5, 36, 34.4, 33.1, 31.9, 30.2, 29, 27.4])
+    run("falling slowly (far off)", [40, 39.9, 39.8, 39.7, 39.6, 39.5, 39.4, 39.3])
+    run("up and down", [14, 25, 20, 22, 21, 19, 23, 20, 24])
+    run("rising", [20, 21, 22, 23, 24, 25, 26, 27])
+    run("only four days", [40, 38, 36, 34])
+    run("nearly full", [9, 8, 7.1, 6, 5, 4.2, 3, 2])
+    exit(0)
 }
 
 // `Rumi --check-place`: is this copy somewhere it can stay (Applications, a build folder) or still inside the download?

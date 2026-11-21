@@ -759,3 +759,21 @@ body.quick .ffoot { padding-bottom: 2px; }
 /* a list row's tick box isn't drawn, so the row shows the outline for it; its hover buttons come up for the keyboard too */
 .row:has(input:focus-visible), .row.how:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; border-radius: 8px; }
 .row:focus-within .hov { display: flex; }
+
+/* ---------- every disk on one shelf (v2.0): beside the name, only when a drive is plugged in ---------- */
+.shelf { display: flex; gap: 2px; margin-left: 14px; }
+.shelf[hidden] { display: none; }
+.disk { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px 0 9px; border: 0; border-radius: 10px; background: none; cursor: pointer;
+  font: inherit; font-size: 13.5px; font-weight: 700; color: var(--dim); }
+.disk:hover { background: var(--well); color: var(--ink); }
+.disk.on { background: var(--well); color: var(--ink); cursor: default; }
+/* a small cartridge: graphite for the Mac (the colour its own space has on the map), pale for a drive */
+.disk .dk { width: 14px; height: 17px; border-radius: 3px 3px 2px 2px; background: #c9c5bb; position: relative; flex: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -2px 0 rgba(0,0,0,.12); }
+.disk .dk.mac { background: var(--c-system); }
+.disk .dk::after { content: ""; position: absolute; inset: 3px 2.5px 6px; border-radius: 1.5px; background: rgba(255,255,255,.8); }
+/* a drive that was just plugged in slides onto the shelf */
+.disk.in { animation: diskin .45s cubic-bezier(.2,.8,.2,1); }
+@keyframes diskin { from { opacity: 0; transform: translateX(-16px); } }
+@media (prefers-reduced-motion: reduce) { .disk.in { animation: none; } }
+.scan #scan-back { margin-top: 22px; }

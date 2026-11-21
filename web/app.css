@@ -64,7 +64,7 @@ a.btn { text-decoration: none; color: inherit; }
   color: var(--dim); font-size: 12px; transition: background .15s, border-color .15s, color .15s; }
 .chip i { width: 8px; height: 8px; border-radius: 3px; }
 .chip b { color: var(--ink); font-weight: 600; }
-button.chip:hover { background: var(--hover); color: var(--ink); }
+button.chip:not(.on):hover { background: var(--hover); color: var(--ink); }   /* a chip that's on keeps its dark look under the pointer */
 .chip.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .chip.on b { color: var(--bg); }
 /* its menu is open: lifted and outlined */

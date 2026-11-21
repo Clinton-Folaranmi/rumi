@@ -8,7 +8,7 @@ private let thousands: NumberFormatter = {
 func commas(_ n: Int) -> String { thousands.string(from: NSNumber(value: n)) ?? String(n) }
 
 func diskInfo() -> [String: Any] {
-    let v = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
+    let v = try? URL(fileURLWithPath: Disks.current.path).resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
     let total = Int64(v?.volumeTotalCapacity ?? 0)
     // "available for important usage" counts purgeable space, which is what Finder shows as available;
     // "available" is what's free this second. The difference is space macOS frees when it needs room.
@@ -29,7 +29,7 @@ let BIN: String = {
 extension Store {
     func statusJSON() -> [String: Any] {
         progressLock.lock(); let seen = filesSeen, cur = current; progressLock.unlock()
-        let disk = diskInfo()   // a volume query: keep it outside the lock the main thread also takes
+        let disk = diskInfo(), disks = Disks.json()   // volume queries: keep them outside the lock the main thread also takes
         // practice copies show a made-up forecast so the line can be looked at; the real one needs steady weeks
         let forecast: [String: Any]? = REVIEW ? ["days": 19, "perDay": 1_400_000_000, "from": Date().timeIntervalSince1970 - 16 * 86400] : History.forecastNow()
         lock.lock(); defer { lock.unlock() }
@@ -41,7 +41,8 @@ extension Store {
             "ready": root != nil, "loading": loading, "refreshing": (scanning || Live.catchingUp) && root != nil, "saved": fromSaved,
             "live": Live.current && !scanning,   // changes on disk reach the map by themselves
             "scannedAt": root != nil ? finished : 0, "generation": generation, "since": root != nil ? baselineAt : 0,
-            "disk": disk, "roots": roots, "home": HOME, "bin": BIN, "binSize": (index[HOME + "/.Trash"]?.size ?? 0) + trashedSince, "practice": REVIEW,
+            "disk": disk, "roots": roots, "home": HOME, "bin": BIN, "binSize": (index[trashPath]?.size ?? 0) + trashedSince, "practice": REVIEW,
+            "disks": disks, "onMac": Disks.current.mac, "diskName": Disks.current.name, "trash": trashPath,
             "uiSounds": UserDefaults.standard.object(forKey: "com.apple.sound.uiaudio.enabled") as? Bool ?? true,   // the Mac's "play user interface sound effects"
             "denied": denied.count, "access": access,
             "dupes": ["status": dupes.status, "progress": dupes.progress, "total": dupes.total, "rev": dupes.rev],
@@ -89,6 +90,8 @@ extension Store {
         var crumbs: [[String: Any]] = []
         var m: Dir? = n
         while let x = m {
+            // a drive is mapped whole, so the path starts at the drive itself, under its own name
+            if x.name.hasPrefix("/"), !Disks.current.mac { crumbs.append(["name": Disks.current.name, "path": x.path]); break }
             crumbs.append(["name": x.name.hasPrefix("/") ? x.name.replacingOccurrences(of: HOME, with: "~") : x.name,
                            "path": x.parent != nil ? x.path : ""])
             if x.name.hasPrefix("/") { crumbs.append(["name": "This Mac", "path": ""]); break }
@@ -220,7 +223,7 @@ extension Store {
                 add("Developer", "\(proj.name) · \(n.name)", "Untouched \(Int(age)) days · reinstalls", p, n.size, "safe", ["kind": "dir"])
             }
         }
-        if let tr = get(".Trash") {
+        if let tr = idx[trashPath] {
             add("Trash", "Trash", "", tr.path, tr.size + trashedSince, "safe", ["action": "empty"])
         }
         if let dl = get("Downloads") {
@@ -601,7 +604,9 @@ func canonicalPath(_ raw: String) -> String? {
     return (parent == "/" ? "" : parent) + "/" + name
 }
 
-private let scannedRoots = Store.shared.roots.map { realPath($0) ?? $0 }
+private var scannedRoots = Store.shared.roots.map { realPath($0) ?? $0 }
+/// Another disk is on screen.
+func rootsChanged() { scannedRoots = Store.shared.roots.map { realPath($0) ?? $0 } }
 
 /// The path, canonical, if it's one of the scanned folders or inside one; nil otherwise (or if it's gone).
 /// `follow`: resolve a link at the end too, so it can't point out of the folders (for reading, not trashing).
@@ -768,7 +773,7 @@ func moveToTrash(_ paths: [String]) -> [String: (ok: Bool, why: String, landed: 
         let gone = viaFinder.filter { fileID($0) == nil }
         // Finder stopped part-way, or its answer couldn't be read: what did move is found by looking in the Trash
         if gone.contains(where: { landed[ids[$0] ?? 0] == nil }) {
-            let tp = HOME + "/.Trash"
+            let tp = Store.shared.trashPath
             for n in (try? FileManager.default.contentsOfDirectory(atPath: tp)) ?? [] { if let id = fileID(tp + "/" + n), landed[id] == nil { landed[id] = tp + "/" + n } }
         }
         for p in gone { res[p] = (true, "", landed[ids[p] ?? 0]) }
@@ -857,7 +862,7 @@ func trashJSON(_ paths: [String]) -> [String: Any] {
 /// Without access to the Trash folder, Finder is asked after all.
 func emptyTrashJSON() -> [String: Any] {
     var ok = false, err = ""
-    if let left = removeContents(of: HOME + "/.Trash") {
+    if let left = removeContents(of: Store.shared.trashPath) {
         ok = left.count == 0
         if !ok { err = "\(left.count) item\(left.count == 1 ? "" : "s") stayed. \(left.why)" }
     } else {

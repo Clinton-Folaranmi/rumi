@@ -3,6 +3,7 @@ import Foundation
 import Darwin
 
 let HOME = NSHomeDirectory()
+let HOME_TRASH = HOME + "/.Trash"
 let KEEP_FILE_MIN: Int64 = 512 * 1024      // files smaller than this are rolled up per folder
 let DUP_MIN: Int64 = 1024 * 1024           // duplicates: only files >= 1 MB
 let CHILD_LIMIT = 80                       // max children sent per node to the page
@@ -231,6 +232,24 @@ final class Store {
     /// What was trashed while a scan runs (replayed on the new tree) and while a duplicate check runs
     /// (left out of its groups). Guarded by `lock`.
     private var scanTrash = TrashLog()
+    /// Goes up when another disk comes on screen; a scan of the one before is dropped when it lands.
+    var diskSeq = 0
+    /// The Bin of the disk on screen: the Mac's own, or the drive's (each drive keeps one per person).
+    var trashPath: String { Disks.current.mac ? HOME_TRASH : Disks.current.path + "/.Trashes/\(getuid())" }
+
+    /// Another disk is coming on screen: let this one's map go and start empty with `roots`. Call with `lock` held.
+    /// Returns the old map, to be freed after the unlock.
+    func forget(roots new: [String]) -> Any {
+        let old = (root, index, bigFiles, dupes.groups)
+        root = nil; index = [:]; bigFiles = []; dupes = DupState(); suggested = []; suggestedApp = [:]; brewKept = nil
+        catTotals = [Int64](repeating: 0, count: 9); kindTotals = [Int64](repeating: 0, count: KINDS.count * 2); denied = []
+        started = 0; finished = 0; baselineAt = 0; baseUsed = -1; churnStale = false; trashedSince = 0
+        fromSaved = false; unloaded = false; scanning = false; loading = false
+        liveEvent = 0; liveFull = 0; liveDirty = false
+        scanTrash = TrashLog(); dupesTrash = TrashLog()
+        roots = new; diskSeq += 1; generation += 1
+        return old
+    }
     var dupesTrash = TrashLog()
     /// How much went to the Trash since the last scan. The map takes things out when they're trashed but doesn't put them
     /// in its Trash folder, so the Trash's size is the scanned size plus this. Guarded by `lock`.
@@ -285,10 +304,13 @@ final class Store {
 
     private func runScan(gen: Int, background: Bool = false) {
         let since = Live.eventNow()   // changes made while this scan runs are replayed from here once it lands
+        lock.lock(); let seq = diskSeq; lock.unlock()
         let top = Dir(name: "This Mac", parent: nil)
         let jobs = rootJobs(top)
         // the quiet launch rescan leaves room for the person using the app: two workers, and a pause while the viewer is open
         let found = scan(top, jobs: jobs, workers: background ? 2 : max(4, ProcessInfo.processInfo.activeProcessorCount), background: background)
+        lock.lock(); let stale = seq != diskSeq; lock.unlock()
+        if stale { return }   // another disk came on screen while this one was being scanned
         let totals = found.cats, kinds = found.kinds, den = found.denied
         let idx = Store.buildIndex(top)
         let big = found.big.sorted { $0.alloc > $1.alloc }   // biggest first, kept that way
@@ -300,6 +322,7 @@ final class Store {
         History.record(at: now, top: top)
 
         lock.lock()
+        if seq != diskSeq { lock.unlock(); return }
         // the old map moves into locals and is freed after the unlock, not while the page waits on the lock
         let old = (root, index, bigFiles)
         root = top
@@ -323,7 +346,7 @@ final class Store {
         if edited { Snapshot.saveSoon() } else { Snapshot.write(saved); Live.save(event: since, at: now, full: now) }
         NSLog("Rumi: scanned \(filesSeen) files in \(String(format: "%.1f", finished - started)) s")
         DispatchQueue.global(qos: .utility).async { findDuplicates(gen: gen) }
-        Hidden.measure()   // the system side changes too; measure it fresh for the "macOS keeps this" card
+        if Disks.current.mac { Hidden.measure() }   // the system side changes too; measure it fresh for the "macOS keeps this" card
         Live.follow(since: since)
     }
 
@@ -532,7 +555,7 @@ final class Store {
     /// Clear the Trash folder in the tree. Call with `lock` held. Returns whether the tree changed.
     @discardableResult
     private func emptyTrashNode() -> Bool {
-        let tp = HOME + "/.Trash"
+        let tp = trashPath
         guard let tr = index[tp], tr.count > 0 || !tr.dirs.isEmpty else { return false }
         let removed = tr.size, cnt = tr.count
         forget(tr, path: tp, ctx: context(of: tr), keepSelf: true)
@@ -555,7 +578,7 @@ final class Store {
         defer { scanTrash = TrashLog() }
         func gone(_ p: String) -> Bool { var st = stat(); return lstat(p, &st) != 0 }
         var changed = false
-        let tp = HOME + "/.Trash"
+        let tp = trashPath
         if scanTrash.emptied, let tr = index[tp] {
             let names = tr.dirs.map(\.name) + tr.files.map(\.name)
             let left = Set(names.filter { !gone(tp + "/" + $0) })
@@ -644,6 +667,6 @@ struct TrashLog {
     var paths: [String] = []
     var emptied = false
     func covers(_ p: String) -> Bool {
-        (emptied && p.hasPrefix(HOME + "/.Trash/")) || paths.contains { p == $0 || p.hasPrefix($0 + "/") }
+        (emptied && p.hasPrefix(Store.shared.trashPath + "/")) || paths.contains { p == $0 || p.hasPrefix($0 + "/") }
     }
 }

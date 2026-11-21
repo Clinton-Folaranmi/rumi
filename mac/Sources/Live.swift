@@ -38,7 +38,7 @@ enum Live {
     /// The file-system log's id for the volume the map is on. It changes when macOS starts the log over.
     private static func logID() -> String {
         var st = stat()
-        guard lstat(HOME, &st) == 0, let u = FSEventsCopyUUIDForDevice(st.st_dev) else { return "" }
+        guard let r = Store.shared.roots.first, lstat(r, &st) == 0, let u = FSEventsCopyUUIDForDevice(st.st_dev) else { return "" }
         return CFUUIDCreateString(nil, u) as String
     }
 
@@ -291,7 +291,7 @@ extension Store {
         }
         lock.unlock()
         var st = stat()
-        guard !targets.isEmpty, lstat(HOME, &st) == 0 else { R.done = true; return R }
+        guard !targets.isEmpty, let r0 = roots.first, lstat(r0, &st) == 0 else { R.done = true; return R }
         let dev = st.st_dev
 
         // 2. read them (no lock: this is the slow part), then scan any subfolder the map didn't have
@@ -319,7 +319,11 @@ extension Store {
         for i in list.indices {
             let t = list[i], L = listings[i], d = t.dir
             guard index[t.path] === d else { continue }   // trashed or replaced meanwhile
-            if L.gone { if !roots.contains(t.path), detachNow(t.path, size: nil) { R.removed += 1 }; continue }
+            if L.gone {
+                if roots.contains(t.path) { DispatchQueue.main.async { Disks.leaveIfGone() } }   // the drive itself went
+                else if detachNow(t.path, size: nil) { R.removed += 1 }
+                continue
+            }
             if L.denied { continue }
             R.listed += 1
             let bucket = t.ctx ?? d.cat   // where this folder's small files are charged (see Store.forget)
@@ -364,7 +368,7 @@ extension Store {
             d.files = files; d.small = L.small; d.smallN = L.smallN
             for j in 0..<9 { catTotals[j] = max(0, catTotals[j] + own[j]) }
             changed.insert(t.path); newBig += L.big
-            if t.path == HOME + "/.Trash" { trashedSince = 0 }   // the map's Bin is exact again
+            if t.path == trashPath { trashedSince = 0 }   // the map's Bin is exact again
             R.moved += abs(dSize)
 
             // subfolders the map didn't have

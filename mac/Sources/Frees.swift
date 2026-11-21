@@ -40,6 +40,9 @@ enum Frees {
         return s
     }
 
+    /// Another disk is on screen: its answers are in its own folder.
+    static func reset() { lock.lock(); kept = nil; lock.unlock() }
+
     /// These went to the Trash: forget them, and whatever holds them or was inside them.
     static func forget(_ paths: [String]) {
         lock.lock()

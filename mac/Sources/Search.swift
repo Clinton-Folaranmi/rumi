@@ -80,7 +80,7 @@ enum Search {
     static func spotlight(_ q: String, limit: Int = 200) -> [[String: Any]] {
         let esc = q.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "*", with: "\\*")
         guard let query = MDQueryCreate(kCFAllocatorDefault, "kMDItemFSName == \"*\(esc)*\"cd" as CFString, nil, nil) else { return [] }
-        MDQuerySetSearchScope(query, [HOME, "/Applications"] as CFArray, 0)
+        MDQuerySetSearchScope(query, Store.shared.roots as CFArray, 0)
         MDQuerySetMaxCount(query, limit)
         guard MDQueryExecute(query, CFOptionFlags(kMDQuerySynchronous.rawValue)) else { return [] }
         let S = Store.shared

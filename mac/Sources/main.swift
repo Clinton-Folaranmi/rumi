@@ -1,6 +1,7 @@
 // Rumi — app entry: one window holding the web page, Mac menus, and the Full Disk Access check.
 import AppKit
 import WebKit
+import UserNotifications
 
 enum Access {
     /// Full Disk Access can't be queried directly, so try to read places only it unlocks.
@@ -43,7 +44,7 @@ enum Access {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, UNUserNotificationCenterDelegate {
     var window: NSWindow!
     /// The main window's web view. nil while the window is closed and its page has been let go.
     var web: WKWebView?
@@ -109,23 +110,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         if !testRun {   // every 20 s: with the window closed and search unused for a while, let memory go
             Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.idleTick() }
             // every ten minutes: note how full the disk is, if the last note is an hour old (for the forecast)
-            Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { _ in DispatchQueue.global(qos: .utility).async { History.sample() } }
+            // and, if the low-space alert is on, whether the Mac has fallen under the line
+            Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { _ in DispatchQueue.global(qos: .utility).async { History.sample(); LowSpace.check() } }
+            LowSpace.install(self)
         }
         // search from anywhere: the menu-bar cartridge and its shortcut (not in test runs, which would add a second cartridge)
         QuickSearch.shared.makeConfig = { [unowned self] in self.makeConfig() }
         QuickSearch.shared.showMain = { [unowned self] in self.showMainWindow() }
+        // a drive plugged in or taken out: the page redraws its shelf, or starts over on the Mac if its drive went
+        Disks.watch { [weak self] lost in self?.web?.evaluateJavaScript(lost ? "location.reload()" : "window.disksChanged && disksChanged()") }
         let misplaced = !testRun && Access.misplaced()
         if !testRun && !misplaced { QuickSearch.shared.install(); QuickSearch.shared.registerShortcut() }
 
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot") {
             // test mode: render off-screen, save a PNG of the window, report a few checks, quit
             launchedAt = Date()
-            Store.shared.loading = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
-            DispatchQueue.global(qos: .userInteractive).async { Store.shared.loadSaved() }
+            if let hold = Double(ProcessInfo.processInfo.environment["RUMI_HOLD"] ?? "") { holdUntil = Date().addingTimeInterval(hold) }   // stay up this long
             Store.shared.access = "granted"
             Live.report = { print("live:", $0) }
-            // RUMI_LIVE=1: bring the saved map up to date as a real launch does, instead of the full scan test runs use
-            if ProcessInfo.processInfo.environment["RUMI_LIVE"] == "1" { Live.bringCurrent() } else { Store.shared.startScan() }
+            let env = ProcessInfo.processInfo.environment
+            if let p = env["RUMI_DISK"], let d = Disks.list().first(where: { $0.path == p }) {
+                Disks.use(d.id)   // RUMI_DISK=/Volumes/Name: start on that drive (its saved map, or a first scan)
+            } else {
+                Store.shared.loading = FileManager.default.fileExists(atPath: Snapshot.treeURL.path)
+                DispatchQueue.global(qos: .userInteractive).async { Store.shared.loadSaved() }
+                // RUMI_LIVE=1: bring the saved map up to date as a real launch does, instead of the full scan test runs use
+                if env["RUMI_LIVE"] == "1" { Live.bringCurrent() } else { Store.shared.startScan() }
+            }
             window.setFrameOrigin(NSPoint(x: -6000, y: 0))
             let out = CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : "/tmp/rumi.png"
             let page = CommandLine.arguments.count > i + 2 ? CommandLine.arguments[i + 2] : "index.html"
@@ -168,6 +179,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 if tries == 0 { print("while updating:", r) }
                 if ((r["refreshing"] as? Bool ?? false) || Date() < self.holdUntil) && tries < 600 { return self.afterRefresh(tries: tries + 1) }
                 print(String(format: "after update (%.1f s):", Date().timeIntervalSince(self.launchedAt)), r)
+                // RUMI_LATE=path: one more picture at the very end (with RUMI_HOLD, after whatever the test did meanwhile)
+                if let late = ProcessInfo.processInfo.environment["RUMI_LATE"] {
+                    return web.takeSnapshot(with: nil) { img, _ in writePNG(img, to: late); NSApp.terminate(nil) }
+                }
                 // RUMI_LIVE_CHECK=1: scan everything afresh and say where the live map disagrees
                 guard ProcessInfo.processInfo.environment["RUMI_LIVE_CHECK"] == "1" else { return NSApp.terminate(nil) }
                 DispatchQueue.global(qos: .userInitiated).async { print(Store.shared.liveCheck()); DispatchQueue.main.async { NSApp.terminate(nil) } }
@@ -212,6 +227,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         Live.stop()
         S.lock.lock(); if S.liveDirty, !S.scanning { Snapshot.saveNow(S) }; S.lock.unlock()
         Snapshot.writeQ.sync {}
+    }
+
+    /// A click on the low-space notice (or its button): the map, on what changed since last time.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler done: @escaping () -> Void) {
+        DispatchQueue.main.async { [self] in
+            if !Disks.current.mac { Disks.use(Disks.MAC); web?.reload() }
+            showMainWindow()
+            func attempt(_ tries: Int) {
+                web?.evaluateJavaScript("(() => { if (!(typeof status === 'object' && status && status.ready && document.querySelector('#map .b'))) return false; if (!document.getElementById('since').hidden && !changedOn) setChanged(true); return true; })()") { ok, _ in
+                    if ok as? Bool != true, tries < 100 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { attempt(tries + 1) } }
+                }
+            }
+            attempt(0)
+            done()
+        }
+    }
+    /// The notice shows even while Rumi is in front.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent n: UNNotification, withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        done([.banner, .sound])
     }
 
     private var movedBytes: Int64 = 0, movedTold = Date.distantPast
@@ -400,6 +434,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         NSApp.mainMenu = main
         NSApp.windowsMenu = win
     }
+}
+
+// `Rumi --check-alert`: what the low-space alert does through a made-up week (free space in GB on a 245 GB disk, one look a row).
+if CommandLine.arguments.contains("--check-alert") {
+    let total = Int64(245e9)
+    print("the line:", LowSpace.size(LowSpace.line(total: total)))
+    var armed = true, last = 0.0, now = 1_000_000.0
+    for (hours, free) in [(0.0, 22.0), (1, 12), (1, 9.4), (1, 9.1), (2, 8), (24, 7), (1, 13), (1, 9), (30, 8.5), (1, 14), (1, 9.9)] {
+        now += hours * 3600
+        let r = LowSpace.look(free: Int64(free * 1e9), total: total, armed: armed, last: last, now: now)
+        armed = r.armed; if r.speak { last = now }
+        print(String(format: "+%2.0f h  %5.1f GB free  %@", hours, free, r.speak ? "→ speaks" : (armed ? "ready" : "quiet")))
+    }
+    exit(0)
 }
 
 // `Rumi --check-forecast`: what the forecast says for made-up histories (one free-space reading a day, in GB).

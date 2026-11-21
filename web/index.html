@@ -20,6 +20,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
       <span class="mascot" id="brand-rumi" aria-hidden="true"></span>
       Rumi
     </div>
+    <div class="shelf" id="shelf" role="tablist" aria-label="Disks" hidden></div>
     <div class="spacer"></div>
     <button class="btn" id="find-btn" data-tip="⌘F to search"></button>
     <button class="btn" id="rescan" data-tip="⌘R to rescan"><svg class="i" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg><span id="rescan-l">Rescan</span></button>
@@ -59,6 +60,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
     <h2 id="scan-h">Mapping your Mac</h2>
     <div class="count num" id="scan-count">0</div>
     <div style="color:var(--dim)" id="scan-msg">files</div>
+    <button class="btn small" id="scan-back" hidden>Back to This Mac</button>
   </div>
 </div>
 
@@ -295,8 +297,28 @@ function syncSelection() {
 const popOnce = el => { if (!el || REDUCED.matches) return; el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); el.addEventListener("animationend", () => el.classList.remove("pop"), { once: true }); };
 
 /* ---------- header ---------- */
+// Every disk on one shelf, beside the name: only there when a drive is plugged in. A click maps that disk instead.
+// The page starts over for it (its own saved map, or a first scan).
+let shelfSeen = null;   // the disks the last draw knew: one that's new since then slides on
+function drawShelf() {
+  const ds = status?.disks || [], el = $("shelf"), had = shelfSeen;
+  shelfSeen = new Set(ds.map(d => d.id));
+  el.hidden = ds.length < 2; if (el.hidden) { el.innerHTML = ""; return; }
+  el.innerHTML = ds.map(d => `<button class="disk${d.on ? " on" : ""}${had && !had.has(d.id) ? " in" : ""}" role="tab" aria-selected="${!!d.on}" data-id="${esc(d.id)}" data-tip="${fmt(d.free)} free of ${fmt(d.total)}"><i class="dk${d.mac ? " mac" : ""}"></i>${esc(d.name)}</button>`).join("");
+  el.querySelectorAll(".disk").forEach(b => { b.onclick = () => useDisk(b.dataset.id); });
+}
+async function useDisk(id) {
+  if (status?.disks?.find(d => d.id === id)?.on) return;
+  try { await api("/api/disk", { id }); } catch { return; }
+  location.reload();
+}
+// a drive was plugged in or taken out (Disks.swift calls this)
+function disksChanged() { api("/api/status").then(s => { status = s; drawShelf(); }).catch(() => {}); }
+$("scan-back").onclick = () => useDisk("mac");
+
 function drawHeader() {
   if (!status) return;
+  drawShelf();
   const d = status.disk, bar = $("diskbar"), chips = $("chips");
   const [n, u] = fmt(d.used, true);
   $("hero-used").innerHTML = `${chars(n)}<small>${u}</small>`;
@@ -321,7 +343,8 @@ function drawHeader() {
   };
   let scanned = 0;
   if (overview) for (const [c, v] of Object.entries(overview.cats).sort((a, b) => b[1] - a[1])) { scanned += v; seg(c, CAT[c], v, color(c)); }
-  seg("hidden", "macOS keeps this", d.used - scanned, css("--c-system"));
+  if (status.onMac) seg("hidden", "macOS keeps this", d.used - scanned, css("--c-system"));
+  else if (overview && d.used - scanned > d.total * .02) seg("", "Rest of the drive", d.used - scanned, css("--c-system"));   // what Rumi can't read on it
   seg("", "Free", d.free, "", "free");
   bar.classList.toggle("focus", !!focusCat);
   drawSince();
@@ -1464,7 +1487,7 @@ function headerGain(f0, f1) {
 }
 // The Bin is picked like anything else, but it's emptied, not moved: on its own the tray opens the screen at Empty Bin;
 // with other things picked, they move first and the screen then offers to empty it.
-const TRASH = () => HOME + "/.Trash";
+const TRASH = () => status?.trash || HOME + "/.Trash";
 $("tray-go").onclick = () => {
   const eff = effective(), rest = eff.filter(p => p !== TRASH());
   if (eff.includes(TRASH())) { picked.delete(TRASH()); syncSelection(); if (!rest.length) return binScreen(); }
@@ -1646,7 +1669,7 @@ function openHidden() {
   if (hiddenData?.status !== "ready" || Date.now() / 1000 - hiddenData.measuredAt > 600) pollHidden();
 }
 async function pollHidden() {
-  if (hiddenPolling) return; hiddenPolling = true;
+  if (hiddenPolling || !status?.onMac) return; hiddenPolling = true;
   try {
     for (let i = 0; i < 90; i++) {
       const r = await api("/api/hidden").catch(() => null);
@@ -1914,7 +1937,8 @@ async function poll() {
   hide("access");
   if (!status.ready) {
     show("scanning"); Rumi.mount($("scan-rumi"), "scan", { size: 128 });
-    $("scan-h").textContent = "Mapping your Mac";
+    $("scan-h").textContent = status.onMac ? "Mapping your Mac" : `Mapping ${status.diskName}`;
+    $("scan-back").hidden = status.onMac;   // a big drive takes a while: the way back to the Mac stays open
     countTo($("scan-count"), status.files);
     $("scan-msg").textContent = "files";
     drawHeader();

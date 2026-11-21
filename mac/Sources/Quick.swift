@@ -63,6 +63,10 @@ final class QuickSearch: NSObject, NSWindowDelegate, WKNavigationDelegate {
     private func showMenu() {
         hide()
         let m = NSMenu()
+        if let d = Disks.list().first(where: { $0.mac }) {   // how much room the Mac has, at a glance
+            m.addItem(withTitle: "\(LowSpace.size(d.free)) free of \(LowSpace.size(d.total))", action: nil, keyEquivalent: "").isEnabled = false
+            m.addItem(.separator())
+        }
         let find = m.addItem(withTitle: "Search", action: #selector(searchFromMenu), keyEquivalent: " ")
         find.keyEquivalentModifierMask = [.control, .option]; find.target = self
         let open = m.addItem(withTitle: "Open Rumi", action: #selector(openMain), keyEquivalent: "")
@@ -70,6 +74,8 @@ final class QuickSearch: NSObject, NSWindowDelegate, WKNavigationDelegate {
         m.addItem(.separator())
         let login = m.addItem(withTitle: "Start at Login", action: #selector(toggleLogin), keyEquivalent: "")
         login.target = self; login.state = QuickSearch.startsAtLogin ? .on : .off
+        let low = m.addItem(withTitle: "Warn When Space Is Low", action: #selector(toggleLowSpace), keyEquivalent: "")
+        low.target = self; low.state = LowSpace.on ? .on : .off
         m.addItem(.separator())
         m.addItem(withTitle: "Quit Rumi", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item?.menu = m
@@ -78,6 +84,11 @@ final class QuickSearch: NSObject, NSWindowDelegate, WKNavigationDelegate {
     }
 
     @objc private func openMain() { showMain?() }
+    @objc private func toggleLowSpace() {
+        LowSpace.set(!LowSpace.on) { why in
+            let a = NSAlert(); a.messageText = "Rumi isn't allowed to notify you"; a.informativeText = why; a.runModal()
+        }
+    }
     @objc private func searchFromMenu() { show() }
 
     // MARK: the shortcut: Control-Option-Space opens search from any app

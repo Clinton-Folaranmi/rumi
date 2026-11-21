@@ -5,7 +5,8 @@
 import Foundation
 
 enum Snapshot {
-    static let dir: URL = {
+    /// This Mac's saved map lives here; a drive's lives in a folder of its own inside (Disks.swift).
+    static let base: URL = {
         // Application Support, not Caches: Rumi's own clean-up suggests emptying Caches folders.
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         var d = base.appendingPathComponent("com.clinton.rumi", isDirectory: true)
@@ -16,6 +17,8 @@ enum Snapshot {
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }()
+    /// The folder of the disk on screen.
+    static var dir: URL = base
     static var treeURL: URL { dir.appendingPathComponent("last-scan.bin") }
     static var dupesURL: URL { dir.appendingPathComponent("duplicates.json") }
     /// The scan the map is compared against ("since last time"): a copy of an earlier last-scan.bin. See Changes.swift.

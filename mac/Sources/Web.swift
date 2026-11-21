@@ -67,7 +67,7 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
 
         // static files
         let pages = ["/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/app.css": "app.css", "/rumi.js": "rumi.js",
-                     "/base.js": "base.js", "/find.js": "find.js", "/quick": "quick.html", "/design-system": "design-system.html"]
+                     "/base.js": "base.js", "/find.js": "find.js", "/guide.js": "guide.js", "/quick": "quick.html", "/design-system": "design-system.html"]
         if let file = pages[path] ?? (path.hasPrefix("/fonts/") && !path.contains("..") ? String(path.dropFirst()) : nil) {
             let f = webRoot.appendingPathComponent(file)
             guard let data = try? Data(contentsOf: f) else { return reply(404, Data(), "text/plain") }

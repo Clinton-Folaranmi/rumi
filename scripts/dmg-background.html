@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- The picture behind the icons in Rumi.dmg: Rumi's purple, the two icons standing on a shelf. 560 × 360, the size of
+     the window release.sh sets. Rendered to mac/dmg-background.png (and @2x) with a browser; the icons sit at x 150
+     and 410, y 178, and Finder draws their names under them at about y 245.
+     Finder draws those names black in light mode and white in dark mode, and nothing can change that, so the
+     background has to be a colour both read on. This purple gives black about 5.4 : 1 and white about 3.9 : 1. -->
+<meta charset="utf-8">
+<link rel="stylesheet" href="../web/fonts/fonts.css">
+<style>
+  html, body { margin: 0; }
+  body { width: 560px; height: 360px; background: #8076de; position: relative; overflow: hidden; font-family: "M PLUS Rounded 1c", system-ui, sans-serif; color: #fff; }
+  #face { position: absolute; left: 0; right: 0; top: 26px; text-align: center; line-height: 0; }
+  svg.arrow { position: absolute; left: 238px; top: 163px; }
+  .shelf { position: absolute; left: 44px; right: 44px; top: 266px; height: 8px; border-radius: 4px; background: rgba(0,0,0,.2); }
+  p { position: absolute; left: 0; right: 0; bottom: 30px; margin: 0; text-align: center; font-weight: 800; font-size: 15px; }
+</style>
+<div id="face"></div>
+<svg class="arrow" width="84" height="30" viewBox="0 0 84 30"><path d="M5 15H76M63 5l13 10-13 10" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<div class="shelf"></div>
+<p>Drag Rumi to Applications</p>
+<script src="../web/rumi.js"></script>
+<script>document.getElementById("face").innerHTML = Rumi.face("happy", 58);</script>

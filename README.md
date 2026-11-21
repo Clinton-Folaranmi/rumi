@@ -17,6 +17,7 @@ A Mac app for managing disk space, searching for files, and giving you better co
 - It keeps itself up to date. Opening it doesn't start a scan.
 - Plug in a drive and map that too.
 - It can warn you when space runs low. Once, not every day.
+- Ask what a folder is, and whether it's safe to delete.
 - If your disk is filling up steadily, it says roughly when it will be full.
 
 It runs entirely on your Mac. No account, and nothing is sent anywhere.

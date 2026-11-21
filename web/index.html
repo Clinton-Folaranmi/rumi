@@ -125,6 +125,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
 <div class="kpop" id="kpop" role="menu" hidden></div>
 <div class="tip" id="tip" aria-hidden="true" hidden></div>
 <div class="insp" id="insp" role="dialog" aria-label="Details" hidden></div>
+<div class="fore-card" id="fore-card" hidden></div>
 <div class="toast" id="toast" role="status" hidden></div>
 <div class="say" id="say" role="status" aria-live="polite"></div>
 <div class="hint" id="hint" hidden></div>
@@ -132,6 +133,7 @@ try { localStorage.removeItem("sm-skin"); } catch (e) {}
 <script src="/rumi.js"></script>
 <script src="/base.js"></script>
 <script src="/find.js"></script>
+<script src="/guide.js"></script>
 <script>
 /* ---------- map geometry (cartridge) ----------
    gap between cartridges, gap inside a tray, a tray's heading (its name, then its stripe) and padding;
@@ -327,8 +329,11 @@ function drawHeader() {
   // the forecast only comes when free space has been falling steadily and would run out within two months
   const f = status.forecast, days = f && Math.round((Date.now() / 1000 - f.from) / 86400);
   const some = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  const fore = f ? ` · <span data-tip="About ${fmt(f.perDay)} a day over the last ${days} days">full in about ${f.days < 14 ? some(f.days, "day") : some(Math.round(f.days / 7), "week")}</span>` : "";
+  const inWords = f && `full in about ${f.days < 14 ? some(f.days, "day") : some(Math.round(f.days / 7), "week")}`, pace = f && `About ${fmt(f.perDay)} a day over the last ${days} days`;
+  const fore = f ? ` · <span id="fore" tabindex="0" aria-label="${inWords}. ${pace}.">${inWords}</span>` : "";
   $("hero-sub").innerHTML = `used of ${fmt(d.total)} · <b class="${low ? "low" : ""}"${tip}>${fmt(d.free)} free</b>${fore}`;
+  $("fore-card").hidden = true;
+  if (f) { const el = $("fore"); el.onmouseenter = el.onfocus = () => foreCard(el, f, inWords, pace); el.onmouseleave = el.onblur = () => { $("fore-card").hidden = true; }; }
   bar.innerHTML = ""; chips.innerHTML = "";
   const seg = (key, lbl, bytes, col, cls) => {
     if (bytes <= 0) return;
@@ -346,6 +351,9 @@ function drawHeader() {
   if (status.onMac) seg("hidden", "macOS keeps this", d.used - scanned, css("--c-system"));
   else if (overview && d.used - scanned > d.total * .02) seg("", "Rest of the drive", d.used - scanned, css("--c-system"));   // what Rumi can't read on it
   seg("", "Free", d.free, "", "free");
+  // the forecast on the bar: what a week at this pace takes out of the free space, hatched in at its edge
+  if (f && d.free > 0) { const fr = bar.querySelector(".free"), week = Math.min(d.free, f.perDay * 7);
+    if (fr) { fr.insertAdjacentHTML("beforeend", `<i class="bite" style="width:${(week / d.free * 100).toFixed(1)}%"></i>`); fr.dataset.tip = `Free · ${fmt(d.free)} · about ${fmt(week)} less in a week`; } }
   bar.classList.toggle("focus", !!focusCat);
   drawSince();
   if (!headerIntro && overview) {
@@ -359,6 +367,21 @@ function drawHeader() {
   }
 }
 let headerIntro = false;
+// The forecast's chart, under its words while the pointer or the keyboard is on them (at once, like every hint): the
+// days it was drawn from, then a dotted line down to full. Shown on a common scale: zero free is the bottom edge.
+function foreCard(el, f, inWords, pace) {
+  const card = $("fore-card"), pts = f.line || [], W = 284, H = 84; if (pts.length < 2) return;
+  const t0 = pts[0][0], t1 = pts.at(-1)[0], tEnd = Math.max(f.at, t1 + 86400), top = Math.max(...pts.map(p => p[1]));
+  const x = t => (t - t0) / (tEnd - t0) * W, y = v => H - v / top * (H - 3) - 1, md = t => new Date(t * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const last = pts.at(-1), line = pts.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
+  card.innerHTML = `<b>${inWords[0].toUpperCase() + inWords.slice(1)}</b><span>${pace}</span>
+    <svg width="${W}" height="${H + 2}" aria-hidden="true"><line x1="0" y1="${H + 1}" x2="${W}" y2="${H + 1}" class="base"/><polyline points="${line}" class="was"/>
+      <line x1="${x(last[0])}" y1="${y(last[1])}" x2="${W}" y2="${H}" class="will"/><circle cx="${x(last[0])}" cy="${y(last[1])}" r="3.5" class="now"/></svg>
+    <div class="ax"><span>${md(t0)}</span><span>today · ${fmt(status.disk.free)} free</span><span>${md(f.at)}</span></div>`;
+  card.hidden = false;
+  const r = el.getBoundingClientRect();
+  card.style.left = Math.max(12, Math.min(r.left - 30, innerWidth - card.offsetWidth - 12)) + "px"; card.style.top = r.bottom + 10 + "px";
+}
 // "+4.2 GB since Thursday": the disk's change since the comparison scan. Click it to see only what changed;
 // the hint names what moved most.
 function drawSince() {
@@ -769,6 +792,14 @@ function block(k, x, y, w, h, cls, i, par) {
     p.onclick = e => { e.stopPropagation(); toggle(k.path, k.size, undefined, k); popOnce(p); };
     el.appendChild(p);
   }
+  // "What is this?": a small ? beside the +, on folders Rumi has something to say about. Only while the pointer is
+  // over the cartridge (or the keyboard is on it): the answer is for the moment you wonder, not for all the time
+  if (k.path && k.type === "dir" && !isApp(k) && w > 62 && h > 34 && guideFor(k.path)) {
+    const q = document.createElement("button"); q.className = "ask" + (el.querySelector(":scope > .pick") ? "" : " solo"); q.textContent = "?"; q.tabIndex = -1;
+    q.setAttribute("aria-label", `What is ${label(k)}?`); q.dataset.tip = "What is this?";
+    q.onclick = e => { e.stopPropagation(); askRumi(k); };
+    el.appendChild(q);
+  }
   if (hid) {
     el.onclick = e => { e.stopPropagation(); $("tip").hidden = true; openHidden(); };
     el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); openHidden(); };
@@ -1062,6 +1093,29 @@ function inspect(k, el) {
   let y = Math.min(Math.max(m, r.top), innerHeight - ph - m);
   p.style.left = x + "px"; p.style.top = y + "px";
 }
+/* ---------- "What is this?" (v2.1): ask Rumi ----------
+   The ? on a folder brings up the big Rumi from the Bin screen. Its screen has three lines, each on one line: what the
+   folder is, one short reason, and one of three answers (safe to delete, check first, leave it). The words are in
+   guide.js, written by hand. */
+const ASK = { safe: ["happy", "Safe to delete"], review: ["scan", "Check first"], keep: ["wow", "Leave it"] };
+function askRumi(k) {
+  const g = guideFor(k.path); if (!g) return;
+  $("tip").hidden = true; dropHint(); closeInsp();
+  const fresh = $("confirm").hidden || $("confirm").classList.contains("closing"), [face, word] = ASK[g.safe];
+  Object.assign(CF, { state: "what", items: [], things: [], gain: null });
+  $("sc-undo").hidden = true; $("sc-note").hidden = true; $("sc-led").classList.remove("on");
+  $("confirm").setAttribute("aria-label", "What is this?");
+  scDraw(face, `<div class="sc-l dim small">${esc(label(k))}${k.size ? " · " + fmt(k.size) : ""}</div>
+    <div class="sc-say" id="sc-say">${esc(g.what)}</div><div class="sc-why">${esc(g.why)}</div><div class="sc-l sc-verdict ${g.safe}">${word}</div>`);
+  // the headline is one line, always: the words are written short, and anything that still doesn't fit is set smaller
+  for (let el = $("sc-say"), fs = 28; el.scrollWidth > el.clientWidth && fs > 18; ) el.style.fontSize = --fs + "px";
+  if (fresh) { show("confirm"); scOn(); beep(660, .05, 0, .02, "triangle"); }
+  // a safe one can go straight to Clean up from here; anything else is worth a look in Finder first
+  const add = g.safe === "safe" && !ownerOf(k.path) && !keepFolder(k.path) && !picked.has(k.path);
+  scKeys(add ? ["k-b", "Add to Clean up", () => { toggle(k.path, k.size, undefined, k); cfClose(); }] : ["k-b", "Show in Finder", () => reveal(k.path)], ["k-a", "Done", cfClose]);
+  say(`${label(k)}. ${g.what}. ${g.why} ${word}.`);
+}
+
 /* ---------- how-to card: for what Rumi won't clear itself ----------
    A tool's own cleanup can't be undone, and some things belong to an app. The card gives the steps and, where there is
    one, the command to copy. Rumi doesn't run it. */
@@ -1507,6 +1561,7 @@ function openConfirm(items) {
   const fresh = $("confirm").hidden || $("confirm").classList.contains("closing");
   const things = binThings(items), total = items.reduce((s, x) => s + x.size, 0), care = things.filter(t => t.care).length;
   Object.assign(CF, { state: "ask", items, things, gain: null });
+  $("confirm").setAttribute("aria-label", `Move to the ${BIN}`);
   $("sc-undo").hidden = true; $("sc-led").classList.remove("on");
   scDraw("scan", `<div class="sc-l">Move to ${BIN}?</div><div class="sc-big num">${fmt(total)}</div>
     <div class="sc-list">${things.map((t, i) => `<div class="sc-row${t.care ? " care" : ""}" data-i="${i}" data-tip="${esc(tilde(t.paths[0]) + (t.paths.length > 1 ? ` and ${t.paths.length - 1} more` : ""))}"><span>${esc(t.name)}</span><b class="num">${fmt(t.size)}</b><button class="sc-x" aria-label="Leave ${esc(t.name)} out" data-tip="Leave out">×</button></div>`).join("")}</div>
@@ -1804,6 +1859,7 @@ async function contextMenu(p) {
     { id: "open", title: folder ? "Open" : isApp(k) ? `Open ${label(k)}` : "Open" },
     { id: "ql", title: "Quick Look", key: " " },
     { id: "reveal", title: "Show in Finder" },
+    ...(folder && guideFor(p) ? [{ id: "what", title: "What Is This?" }] : []),
     { sep: true },
     { id: "pick", title: picked.has(p) ? "Remove from Clean up" : "Add to Clean up", enabled: !owner },
     { sep: true },
@@ -1813,6 +1869,7 @@ async function contextMenu(p) {
     case "open": if (folder) { closeInsp(); open(p, document.querySelector(`#map .b[data-path="${CSS.escape(p)}"]`)); } else api("/native/open", { path: p }); break;
     case "ql": hoverP = p; ql("toggle"); break;
     case "reveal": reveal(p); break;
+    case "what": askRumi(k); break;
     case "pick": toggle(p, sizeOf(p), undefined, k); break;
     case "trash": trashOne(p); break;
   }
@@ -1901,6 +1958,7 @@ addEventListener("keydown", e => {
   if (/^Arrow/.test(e.key) && !e.metaKey && !e.altKey && !e.ctrlKey && (!at || at === document.body || at.closest("#map")) && $("kpop").hidden) { e.preventDefault(); kbMove(e.key); return; }
   if (cell && e.key === "Enter") { e.preventDefault(); kbOn = true; cell.click(); return; }
   if (cell && (e.key === "+" || e.key === "=")) { e.preventDefault(); cell.querySelector(":scope > .pick")?.click(); return; }
+  if (cell && e.key === "?") { e.preventDefault(); cell.querySelector(":scope > .ask")?.click(); return; }
   const target = hoverP || inspEl?.dataset.path;
   if (e.key === " " && !e.metaKey && NATIVE && (target || qlOpen)) { e.preventDefault(); ql(target ? "toggle" : "close"); return; }
   if (e.metaKey && e.key === "Backspace") { e.preventDefault(); if (target) trashOne(target); return; }

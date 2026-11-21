@@ -777,3 +777,34 @@ body.quick .ffoot { padding-bottom: 2px; }
 @keyframes diskin { from { opacity: 0; transform: translateX(-16px); } }
 @media (prefers-reduced-motion: reduce) { .disk.in { animation: none; } }
 .scan #scan-back { margin-top: 22px; }
+
+/* ---------- "What is this?" (v2.1): ask Rumi ---------- */
+/* the ? on a folder: beside the +, the same small white button, there only under the pointer or the keyboard */
+.b > .ask { position: absolute; z-index: 4; top: 21px; right: 43px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; display: none; place-items: center;
+  background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.b > .ask.solo { right: 15px; }
+.b.sm > .ask { top: 6px; right: 31px; } .b.sm > .ask.solo { right: 5px; }
+.b.container > .ask { top: 7px; right: 36px; background: var(--ink); color: var(--bg); box-shadow: none; } .b.container > .ask.solo { right: 8px; }
+.b:hover > .ask, .b:focus-visible > .ask { display: grid; }
+.b.container:has(.b:hover) > .ask { display: none; }   /* the pointer is on something inside the tray: that one's ? shows, not the tray's */
+/* what Rumi says on its screen */
+.sc-say { font-size: 28px; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; margin: 4px 0 2px; max-width: 100%; white-space: nowrap; overflow: hidden; }
+.sc-why { font-size: 13px; font-weight: 700; letter-spacing: .01em; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .92; }
+.sc-verdict { margin-top: 12px; padding: 5px 12px; border-radius: 99px; border: 2px solid currentColor; }
+.sc-verdict.safe { color: #7ee2a8; text-shadow: 0 0 12px rgba(126,226,168,.5); }
+.sc-verdict.review { color: #ffc46b; text-shadow: 0 0 12px rgba(255,196,107,.5); }
+
+/* ---------- the forecast (v2.0): a chart under its words, and a week's loss marked on the disk bar ---------- */
+#fore { cursor: default; border-radius: 4px; }
+.fore-card { position: fixed; z-index: 60; width: 318px; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px;
+  box-shadow: var(--shadow); font-size: 12px; color: var(--dim); }
+.fore-card[hidden] { display: none; }
+.fore-card b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 1px; }
+.fore-card svg { display: block; margin: 12px 0 6px; overflow: visible; }
+.fore-card .base { stroke: var(--line2); }
+.fore-card .was { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.fore-card .will { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 4; stroke-linecap: round; }
+.fore-card .now { fill: var(--accent); }
+.fore-card .ax { display: flex; justify-content: space-between; font-weight: 700; font-size: 11px; color: var(--faint); }
+/* on the bar: pink hatching at the edge of the free space, as wide as a week at this pace */
+.diskbar > div.free .bite { position: absolute; left: 0; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, rgba(236,79,124,.5) 0 4px, rgba(236,79,124,.16) 4px 8px); border-right: 2px solid var(--accent); }

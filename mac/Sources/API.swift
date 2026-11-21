@@ -27,11 +27,23 @@ let BIN: String = {
 }()
 
 extension Store {
+    /// A made-up forecast for practice copies: free space falling for 16 days, with a wobble, ending at today's figure.
+    static func practiceForecast(free: Int64) -> [String: Any] {
+        let now = Date().timeIntervalSince1970, perDay = 1_400_000_000.0
+        var line: [[Double]] = []
+        for i in stride(from: 16, through: 0, by: -1) {
+            let d = Double(i), wobble: Double = sin(d * 1.7) * perDay * 0.6, step: Double = i % 5 == 0 ? perDay * 0.8 : 0
+            line.append([now - d * 86400, Double(free) + perDay * d + wobble + step])
+        }
+        let days = (Double(free) / perDay).rounded()
+        return ["days": days, "at": now + days * 86400, "perDay": perDay, "from": now - 16 * 86400, "line": line]
+    }
+
     func statusJSON() -> [String: Any] {
         progressLock.lock(); let seen = filesSeen, cur = current; progressLock.unlock()
         let disk = diskInfo(), disks = Disks.json()   // volume queries: keep them outside the lock the main thread also takes
         // practice copies show a made-up forecast so the line can be looked at; the real one needs steady weeks
-        let forecast: [String: Any]? = REVIEW ? ["days": 19, "perDay": 1_400_000_000, "from": Date().timeIntervalSince1970 - 16 * 86400] : History.forecastNow()
+        let forecast: [String: Any]? = REVIEW ? Store.practiceForecast(free: disk["free"] as? Int64 ?? 0) : History.forecastNow()
         lock.lock(); defer { lock.unlock() }
         let end = finished > started ? finished : Date().timeIntervalSince1970
         var out: [String: Any] = [

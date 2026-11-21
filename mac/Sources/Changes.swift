@@ -300,6 +300,8 @@ enum History {
         guard slope < 0, fit >= 0.6, freeNow > 0 else { return nil }
         let left = freeNow / -slope / 86400
         guard left >= 1, left <= 60 else { return nil }
-        return ["days": left.rounded(), "at": now + left * 86400, "perDay": (-slope * 86400).rounded(), "from": a.t, "points": pts.count]
+        // `line`: the days the forecast was drawn from (when, free bytes), for the chart
+        return ["days": left.rounded(), "at": now + left * 86400, "perDay": (-slope * 86400).rounded(), "from": a.t, "points": pts.count,
+                "line": pts.map { [$0.t, $0.free] }]
     }
 }
